@@ -1,0 +1,18 @@
+{
+  "name": "sports-gpt-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Normalized sports data gateway for GPT Actions across NBA, NFL, NCAAM, NCAAF, MLB, and NHL.",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  }
+}

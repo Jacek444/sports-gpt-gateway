@@ -1,0 +1,575 @@
+openapi: 3.1.0
+info:
+  title: Sports GPT Gateway
+  version: 1.0.0
+  description: >
+    Unified sports data API for NBA, NFL, NCAA men's basketball, NCAA football,
+    MLB, and NHL. Designed for GPT Actions.
+servers:
+  - url: https://your-public-server.example.com
+    description: Replace with your public HTTPS gateway URL
+tags:
+  - name: Sports
+paths:
+  /health:
+    get:
+      operationId: healthCheck
+      tags: [Sports]
+      summary: Health check
+      responses:
+        '200':
+          description: Service health
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  provider_defaults:
+                    type: object
+                    additionalProperties:
+                      type: string
+  /v1/leagues:
+    get:
+      operationId: listLeagues
+      tags: [Sports]
+      summary: List supported leagues
+      responses:
+        '200':
+          description: Supported leagues
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/League'
+  /v1/games:
+    get:
+      operationId: listGames
+      tags: [Sports]
+      summary: List games for a league and optional date
+      parameters:
+        - in: query
+          name: league
+          required: true
+          schema:
+            $ref: '#/components/schemas/LeagueCode'
+        - in: query
+          name: date
+          required: false
+          description: Game date in YYYY-MM-DD format
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: season
+          required: false
+          schema:
+            type: integer
+        - in: query
+          name: week
+          required: false
+          description: Mainly used by NFL and NCAAF
+          schema:
+            type: integer
+        - in: query
+          name: team
+          required: false
+          description: Team abbreviation, team name, or provider team ID
+          schema:
+            type: string
+        - in: query
+          name: status
+          required: false
+          description: Filter by normalized status
+          schema:
+            type: string
+            enum: [scheduled, live, final, postponed]
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+        - in: query
+          name: cursor
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Games
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Game'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v1/games/{league}/{gameId}:
+    get:
+      operationId: getGame
+      tags: [Sports]
+      summary: Get a specific game
+      parameters:
+        - in: path
+          name: league
+          required: true
+          schema:
+            $ref: '#/components/schemas/LeagueCode'
+        - in: path
+          name: gameId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Game detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Game'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /v1/teams:
+    get:
+      operationId: listTeams
+      tags: [Sports]
+      summary: List teams for a league
+      parameters:
+        - in: query
+          name: league
+          required: true
+          schema:
+            $ref: '#/components/schemas/LeagueCode'
+        - in: query
+          name: search
+          required: false
+          description: Team name, city, college, or abbreviation
+          schema:
+            type: string
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: Teams
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Team'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v1/standings:
+    get:
+      operationId: listStandings
+      tags: [Sports]
+      summary: Get standings for a league and season
+      parameters:
+        - in: query
+          name: league
+          required: true
+          schema:
+            $ref: '#/components/schemas/LeagueCode'
+        - in: query
+          name: season
+          required: false
+          schema:
+            type: integer
+        - in: query
+          name: conference
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: division
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Standings rows
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StandingRow'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v1/logs/bet-log:
+    get:
+      operationId: listBetLogEntries
+      tags: [Sports]
+      summary: List saved betting log entries
+      responses:
+        '200':
+          description: Betting log entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BetLogEntry'
+    post:
+      operationId: createBetLogEntry
+      tags: [Sports]
+      summary: Save a betting log entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BetLogEntryInput'
+      responses:
+        '201':
+          description: Betting log entry created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/BetLogEntry'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v1/logs/postmortems:
+    get:
+      operationId: listPostmortems
+      tags: [Sports]
+      summary: List saved betting postmortems
+      responses:
+        '200':
+          description: Betting postmortems
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PostmortemEntry'
+    post:
+      operationId: createPostmortem
+      tags: [Sports]
+      summary: Save a betting postmortem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostmortemEntryInput'
+      responses:
+        '201':
+          description: Betting postmortem created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/PostmortemEntry'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+components:
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    LeagueCode:
+      type: string
+      enum: [NBA, NFL, NCAAM, NCAAF, MLB, NHL]
+    League:
+      type: object
+      properties:
+        code:
+          $ref: '#/components/schemas/LeagueCode'
+        name:
+          type: string
+        season_type:
+          type: string
+        notes:
+          type: string
+      required: [code, name]
+    Team:
+      type: object
+      properties:
+        id:
+          type: string
+        league:
+          $ref: '#/components/schemas/LeagueCode'
+        name:
+          type: string
+        short_name:
+          type: string
+        market:
+          type: string
+          nullable: true
+        abbreviation:
+          type: string
+        conference:
+          type: string
+          nullable: true
+        division:
+          type: string
+          nullable: true
+      required: [id, league, name, abbreviation]
+    GameStatus:
+      type: object
+      properties:
+        code:
+          type: string
+          enum: [scheduled, live, final, postponed, unknown]
+        display:
+          type: string
+        is_live:
+          type: boolean
+        period:
+          type: integer
+          nullable: true
+        clock:
+          type: string
+          nullable: true
+      required: [code, display, is_live]
+    GameScore:
+      type: object
+      properties:
+        home:
+          type: integer
+          nullable: true
+        away:
+          type: integer
+          nullable: true
+    Game:
+      type: object
+      properties:
+        id:
+          type: string
+        league:
+          $ref: '#/components/schemas/LeagueCode'
+        provider:
+          type: string
+        season:
+          type: integer
+          nullable: true
+        week:
+          type: integer
+          nullable: true
+        start_time:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          $ref: '#/components/schemas/GameStatus'
+        home_team:
+          $ref: '#/components/schemas/Team'
+        away_team:
+          $ref: '#/components/schemas/Team'
+        score:
+          $ref: '#/components/schemas/GameScore'
+        venue:
+          type: string
+          nullable: true
+      required: [id, league, provider, status, home_team, away_team, score]
+    StandingRow:
+      type: object
+      properties:
+        team:
+          $ref: '#/components/schemas/Team'
+        wins:
+          type: integer
+          nullable: true
+        losses:
+          type: integer
+          nullable: true
+        ties:
+          type: integer
+          nullable: true
+        pct:
+          type: number
+          nullable: true
+        rank:
+          type: integer
+          nullable: true
+        conference:
+          type: string
+          nullable: true
+        division:
+          type: string
+          nullable: true
+        streak:
+          type: string
+          nullable: true
+      required: [team]
+    PaginationMeta:
+      type: object
+      properties:
+        cursor:
+          type: string
+          nullable: true
+        next_cursor:
+          type: string
+          nullable: true
+        per_page:
+          type: integer
+          nullable: true
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            message:
+              type: string
+            status:
+              type: integer
+          required: [message, status]
+      required: [error]
+    BetLogEntryInput:
+      type: object
+      properties:
+        date:
+          type: string
+        sport:
+          type: string
+        league:
+          type: string
+        event:
+          type: string
+        market:
+          type: string
+        selection:
+          type: string
+        line:
+          type: string
+          nullable: true
+        odds:
+          type: string
+        sportsbook:
+          type: string
+        stake_usd:
+          type: number
+        units:
+          type: number
+        is_bonus_bet:
+          type: boolean
+        boost_used:
+          type: boolean
+        ev_percent:
+          type: number
+          nullable: true
+        fair_odds:
+          type: string
+          nullable: true
+        kelly_percent:
+          type: number
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+        result:
+          type: string
+          nullable: true
+        payout_usd:
+          type: number
+          nullable: true
+        closing_line:
+          type: string
+          nullable: true
+        clv_notes:
+          type: string
+          nullable: true
+        postmortem:
+          type: string
+          nullable: true
+      required: [date, sport, league, event, market, selection, odds, sportsbook]
+    BetLogEntry:
+      allOf:
+        - $ref: '#/components/schemas/BetLogEntryInput'
+        - type: object
+          properties:
+            id:
+              type: string
+            created_at:
+              type: string
+              format: date-time
+          required: [id, created_at]
+    PostmortemEntryInput:
+      type: object
+      properties:
+        date:
+          type: string
+        summary:
+          type: string
+        best_decisions:
+          type: array
+          items:
+            type: string
+        worst_decisions:
+          type: array
+          items:
+            type: string
+        process_notes:
+          type: array
+          items:
+            type: string
+        adjustments:
+          type: array
+          items:
+            type: string
+      required: [date, summary]
+    PostmortemEntry:
+      allOf:
+        - $ref: '#/components/schemas/PostmortemEntryInput'
+        - type: object
+          properties:
+            id:
+              type: string
+            created_at:
+              type: string
+              format: date-time
+          required: [id, created_at]

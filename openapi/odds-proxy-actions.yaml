@@ -1,0 +1,240 @@
+openapi: 3.1.0
+info:
+  title: Sports GPT Odds Proxy
+  version: 1.0.0
+  description: >
+    Proxy action for The Odds API. Your server stores the API key, and the GPT
+    calls this proxy instead of calling api.the-odds-api.com directly.
+servers:
+  - url: https://your-public-server.example.com
+    description: Replace with your deployed backend URL
+paths:
+  /health:
+    get:
+      operationId: healthCheck
+      summary: Health check
+      responses:
+        '200':
+          description: Service status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  odds_api_configured:
+                    type: boolean
+  /v1/odds/sports:
+    get:
+      operationId: listOddsSports
+      summary: List in-season sports from The Odds API
+      parameters:
+        - in: query
+          name: all
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Sports list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyResponse'
+  /v1/odds/{sport}/odds:
+    get:
+      operationId: getOddsBoard
+      summary: Get odds board for a sport
+      parameters:
+        - in: path
+          name: sport
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: regions
+          required: false
+          schema:
+            type: string
+            default: us
+        - in: query
+          name: markets
+          required: false
+          schema:
+            type: string
+            default: h2h,spreads,totals
+        - in: query
+          name: oddsFormat
+          required: false
+          schema:
+            type: string
+            enum: [american, decimal]
+            default: american
+        - in: query
+          name: dateFormat
+          required: false
+          schema:
+            type: string
+            enum: [iso, unix]
+            default: iso
+        - in: query
+          name: bookmakers
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: commenceTimeFrom
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: commenceTimeTo
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: eventIds
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Odds board
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyResponse'
+  /v1/odds/{sport}/scores:
+    get:
+      operationId: getOddsScores
+      summary: Get live, upcoming, and recent scores for a sport
+      parameters:
+        - in: path
+          name: sport
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: daysFrom
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 3
+        - in: query
+          name: dateFormat
+          required: false
+          schema:
+            type: string
+            enum: [iso, unix]
+            default: iso
+      responses:
+        '200':
+          description: Scores
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyResponse'
+  /v1/odds/{sport}/events:
+    get:
+      operationId: getOddsEvents
+      summary: Get event list for a sport
+      parameters:
+        - in: path
+          name: sport
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: dateFormat
+          required: false
+          schema:
+            type: string
+            enum: [iso, unix]
+            default: iso
+      responses:
+        '200':
+          description: Events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyResponse'
+  /v1/odds/{sport}/events/{eventId}/odds:
+    get:
+      operationId: getOddsForEvent
+      summary: Get odds for one event, including props or alternate markets
+      parameters:
+        - in: path
+          name: sport
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: eventId
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: regions
+          required: false
+          schema:
+            type: string
+            default: us
+        - in: query
+          name: markets
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: oddsFormat
+          required: false
+          schema:
+            type: string
+            enum: [american, decimal]
+            default: american
+        - in: query
+          name: dateFormat
+          required: false
+          schema:
+            type: string
+            enum: [iso, unix]
+            default: iso
+        - in: query
+          name: bookmakers
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Single-event odds
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyResponse'
+components:
+  schemas:
+    ProxyResponse:
+      type: object
+      properties:
+        data:
+          oneOf:
+            - type: array
+              items: {}
+            - type: object
+              additionalProperties: true
+          description: Raw JSON returned by The Odds API
+        quota:
+          type: object
+          properties:
+            remaining:
+              type: string
+              nullable: true
+            used:
+              type: string
+              nullable: true
+            last:
+              type: string
+              nullable: true
