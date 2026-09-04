@@ -27,6 +27,26 @@ logsRouter.post('/bet-log', async (req, res, next) => {
   }
 });
 
+logsRouter.delete('/bet-log/:id', async (req, res, next) => {
+  try {
+    const deleted = await deleteBetLogEntry(req.params.id);
+
+    if (!deleted) {
+      return res.status(404).json({
+        success: false,
+        error: 'Bet log entry not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      deleted_id: req.params.id
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 logsRouter.get('/postmortems', async (req, res, next) => {
   try {
     const entries = await listPostmortems();
