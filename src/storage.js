@@ -124,6 +124,76 @@ export async function addBetLogEntry(input) {
   return data;
 }
 
+export async function updateBetLogEntry(id, input) {
+  const normalizedId = normalizeString(id, 'id');
+
+  const updates = {};
+
+  if (input.closing_line !== undefined) {
+    updates.closing_line = input.closing_line ?? null;
+  }
+
+  if (input.clv_notes !== undefined) {
+    updates.clv_notes = String(input.clv_notes ?? '').trim() || null;
+  }
+
+  if (input.result !== undefined) {
+    updates.result = String(input.result ?? '').trim() || null;
+  }
+
+  if (input.payout_usd !== undefined) {
+    updates.payout_usd = normalizeNumber(
+      input.payout_usd,
+      'payout_usd',
+      { minimum: 0 }
+    );
+  }
+
+  if (input.postmortem !== undefined) {
+    updates.postmortem = String(input.postmortem ?? '').trim() || null;
+  }
+
+  if (input.ev_percent !== undefined) {
+    updates.ev_percent = normalizeNumber(
+      input.ev_percent,
+      'ev_percent'
+    );
+  }
+
+  if (input.fair_odds !== undefined) {
+    updates.fair_odds = input.fair_odds ?? null;
+  }
+
+  if (input.kelly_percent !== undefined) {
+    updates.kelly_percent = normalizeNumber(
+      input.kelly_percent,
+      'kelly_percent'
+    );
+  }
+
+  if (input.reason !== undefined) {
+    updates.reason = String(input.reason ?? '').trim() || null;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    throw new HttpError(400, 'No valid fields provided to update');
+  }
+
+  const { data, error } = await supabase
+    .from('bet_log')
+    .update(updates)
+    .eq('id', normalizedId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Supabase updateBetLogEntry error:', error);
+    throw new HttpError(500, 'Failed to update bet log entry');
+  }
+
+  return data;
+}
+
 export async function deleteBetLogEntry(id) {
   const normalizedId = normalizeString(id, 'id');
 
