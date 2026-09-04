@@ -2,6 +2,7 @@ import express from 'express';
 import {
   addBetLogEntry,
   addPostmortem,
+  deleteBetLogEntry,
   listBetLogEntries,
   listPostmortems
 } from '../storage.js';
