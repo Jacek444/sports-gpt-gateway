@@ -4,7 +4,7 @@ import {
   addPostmortem,
   deleteBetLogEntry,
   listBetLogEntries,
-  listPostmortems
+  listPostmortems,
   updateBetLogEntry
 } from '../storage.js';
 
