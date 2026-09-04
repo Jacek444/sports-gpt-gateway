@@ -106,6 +106,22 @@ export async function addBetLogEntry(input) {
   return entry;
 }
 
+export async function deleteBetLogEntry(id) {
+  const payload = await readJson(FILES.betLog, { entries: [] });
+
+  const index = payload.entries.findIndex((entry) => entry.id === id);
+
+  if (index === -1) {
+    return false;
+  }
+
+  payload.entries.splice(index, 1);
+
+  await writeJson(FILES.betLog, payload);
+
+  return true;
+}
+
 export async function listPostmortems() {
   const payload = await readJson(FILES.postmortems, { entries: [] });
   return payload.entries || [];
