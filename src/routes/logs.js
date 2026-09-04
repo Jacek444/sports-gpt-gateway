@@ -5,6 +5,7 @@ import {
   deleteBetLogEntry,
   listBetLogEntries,
   listPostmortems
+  updateBetLogEntry
 } from '../storage.js';
 
 export const logsRouter = express.Router();
