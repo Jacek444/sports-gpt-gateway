@@ -28,6 +28,22 @@ logsRouter.post('/bet-log', async (req, res, next) => {
   }
 });
 
+logsRouter.patch('/bet-log/:id', async (req, res, next) => {
+  try {
+    const entry = await updateBetLogEntry(
+      req.params.id,
+      req.body || {}
+    );
+
+    res.json({
+      success: true,
+      data: entry
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 logsRouter.delete('/bet-log/:id', async (req, res, next) => {
   try {
     const deleted = await deleteBetLogEntry(req.params.id);
