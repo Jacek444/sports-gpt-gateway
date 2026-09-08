@@ -6,8 +6,8 @@ info:
     Unified sports data API for NBA, NFL, NCAA men's basketball, NCAA football,
     MLB, and NHL. Designed for GPT Actions.
 servers:
-  - url: https://your-public-server.example.com
-    description: Replace with your public HTTPS gateway URL
+ - url: https://sports-gpt-gateway.onrender.com
+    description: Sports GPT Gateway on Render
 tags:
   - name: Sports
 paths:
@@ -266,6 +266,64 @@ paths:
                     $ref: '#/components/schemas/BetLogEntry'
         '400':
           $ref: '#/components/responses/BadRequest'
+            /v1/logs/bet-log/{id}:
+    patch:
+      operationId: updateBetLogEntry
+      tags: [Sports]
+      summary: Update a saved betting log entry
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BetLogEntryUpdate'
+      responses:
+        '200':
+          description: Betting log entry updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/BetLogEntry'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      operationId: deleteBetLogEntry
+      tags: [Sports]
+      summary: Delete a saved betting log entry
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Betting log entry deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  deleted_id:
+                    type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
   /v1/logs/postmortems:
     get:
       operationId: listPostmortems
@@ -585,6 +643,36 @@ components:
           type: string
           nullable: true
       required: [date, sport, league, event, market, selection, odds, sportsbook]
+          BetLogEntryUpdate:
+      type: object
+      properties:
+        closing_line:
+          type: string
+          nullable: true
+        clv_notes:
+          type: string
+          nullable: true
+        result:
+          type: string
+          nullable: true
+        payout_usd:
+          type: number
+          nullable: true
+        postmortem:
+          type: string
+          nullable: true
+        ev_percent:
+          type: number
+          nullable: true
+        fair_odds:
+          type: string
+          nullable: true
+        kelly_percent:
+          type: number
+          nullable: true
+        reason:
+          type: string
+          nullable: true
     BetLogEntry:
       allOf:
         - $ref: '#/components/schemas/BetLogEntryInput'
