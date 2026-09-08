@@ -258,3 +258,84 @@ export async function addPostmortem(input) {
 
   return data;
 }
+
+export async function updatePostmortem(id, input) {
+  const normalizedId = normalizeString(id, 'id');
+
+  const updates = {};
+
+  if (input.date !== undefined) {
+    updates.date = normalizeString(input.date, 'date');
+  }
+
+  if (input.summary !== undefined) {
+    updates.summary = normalizeString(input.summary, 'summary');
+  }
+
+  if (input.best_decisions !== undefined) {
+    updates.best_decisions = Array.isArray(input.best_decisions)
+      ? input.best_decisions
+          .map((value) => String(value).trim())
+          .filter(Boolean)
+      : [];
+  }
+
+  if (input.worst_decisions !== undefined) {
+    updates.worst_decisions = Array.isArray(input.worst_decisions)
+      ? input.worst_decisions
+          .map((value) => String(value).trim())
+          .filter(Boolean)
+      : [];
+  }
+
+  if (input.process_notes !== undefined) {
+    updates.process_notes = Array.isArray(input.process_notes)
+      ? input.process_notes
+          .map((value) => String(value).trim())
+          .filter(Boolean)
+      : [];
+  }
+
+  if (input.adjustments !== undefined) {
+    updates.adjustments = Array.isArray(input.adjustments)
+      ? input.adjustments
+          .map((value) => String(value).trim())
+          .filter(Boolean)
+      : [];
+  }
+
+  if (Object.keys(updates).length === 0) {
+    throw new HttpError(400, 'No valid fields provided to update');
+  }
+
+  const { data, error } = await supabase
+    .from('postmortems')
+    .update(updates)
+    .eq('id', normalizedId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Supabase updatePostmortem error:', error);
+    throw new HttpError(500, 'Failed to update postmortem');
+  }
+
+  return data;
+}
+
+export async function deletePostmortem(id) {
+  const normalizedId = normalizeString(id, 'id');
+
+  const { data, error } = await supabase
+    .from('postmortems')
+    .delete()
+    .eq('id', normalizedId)
+    .select('id');
+
+  if (error) {
+    console.error('Supabase deletePostmortem error:', error);
+    throw new HttpError(500, 'Failed to delete postmortem');
+  }
+
+  return Array.isArray(data) && data.length > 0;
+}
