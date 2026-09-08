@@ -305,6 +305,64 @@ paths:
                     $ref: '#/components/schemas/PostmortemEntry'
         '400':
           $ref: '#/components/responses/BadRequest'
+            /v1/logs/postmortems/{id}:
+    patch:
+      operationId: updatePostmortem
+      tags: [Sports]
+      summary: Update a saved betting postmortem
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostmortemEntryUpdate'
+      responses:
+        '200':
+          description: Betting postmortem updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/PostmortemEntry'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      operationId: deletePostmortem
+      tags: [Sports]
+      summary: Delete a saved betting postmortem
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Betting postmortem deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  deleted_id:
+                    type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
 components:
   responses:
     BadRequest:
@@ -562,6 +620,29 @@ components:
           items:
             type: string
       required: [date, summary]
+          PostmortemEntryUpdate:
+      type: object
+      properties:
+        date:
+          type: string
+        summary:
+          type: string
+        best_decisions:
+          type: array
+          items:
+            type: string
+        worst_decisions:
+          type: array
+          items:
+            type: string
+        process_notes:
+          type: array
+          items:
+            type: string
+        adjustments:
+          type: array
+          items:
+            type: string
     PostmortemEntry:
       allOf:
         - $ref: '#/components/schemas/PostmortemEntryInput'
