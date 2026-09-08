@@ -8,6 +8,7 @@ import { oddsApiRouter } from './routes/oddsApi.js';
 
 const app = express();
 
+app.use('/openapi', express.static('openapi'));
 app.use(express.json());
 app.use('/v1/logs', logsRouter);
 app.use('/v1/odds', oddsApiRouter);
