@@ -3,9 +3,11 @@ import {
   addBetLogEntry,
   addPostmortem,
   deleteBetLogEntry,
+  deletePostmortem,
   listBetLogEntries,
   listPostmortems,
-  updateBetLogEntry
+  updateBetLogEntry,
+  updatePostmortem
 } from '../storage.js';
 
 export const logsRouter = express.Router();
@@ -77,6 +79,41 @@ logsRouter.post('/postmortems', async (req, res, next) => {
   try {
     const entry = await addPostmortem(req.body || {});
     res.status(201).json({ data: entry });
+  } catch (error) {
+    next(error);
+  }
+});
+logsRouter.patch('/postmortems/:id', async (req, res, next) => {
+  try {
+    const entry = await updatePostmortem(
+      req.params.id,
+      req.body || {}
+    );
+
+    res.json({
+      success: true,
+      data: entry
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+logsRouter.delete('/postmortems/:id', async (req, res, next) => {
+  try {
+    const deleted = await deletePostmortem(req.params.id);
+
+    if (!deleted) {
+      return res.status(404).json({
+        success: false,
+        error: 'Postmortem not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      deleted_id: req.params.id
+    });
   } catch (error) {
     next(error);
   }
