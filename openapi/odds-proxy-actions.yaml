@@ -6,8 +6,9 @@ info:
     Proxy action for The Odds API. Your server stores the API key, and the GPT
     calls this proxy instead of calling api.the-odds-api.com directly.
 servers:
-  - url: https://your-public-server.example.com
-    description: Replace with your deployed backend URL
+servers:
+  - url: https://sports-gpt-gateway.onrender.com
+    description: Deployed Render backend URL
 paths:
   /health:
     get:
@@ -214,9 +215,355 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProxyResponse'
+                  /v1/logs/bet-log:
+    get:
+      operationId: listBetLogEntries
+      summary: Get saved bet log entries
+      responses:
+        '200':
+          description: Bet log entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BetLogEntry'
+
+    post:
+      operationId: createBetLogEntry
+      summary: Save a bet log entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BetLogEntryInput'
+      responses:
+        '201':
+          description: Saved bet log entry
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/BetLogEntry'
+
+  /v1/logs/bet-log/{id}:
+    patch:
+      operationId: updateBetLogEntry
+      summary: Update a saved bet log entry by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BetLogEntryUpdateInput'
+      responses:
+        '200':
+          description: Bet log entry updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/BetLogEntry'
+
+    delete:
+      operationId: deleteBetLogEntry
+      summary: Delete a saved bet log entry by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Bet log entry deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  deleted_id:
+                    type: string
+                      /v1/logs/postmortems:
+    get:
+      operationId: listPostmortems
+      summary: Get saved postmortem entries
+      responses:
+        '200':
+          description: Postmortem entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Postmortem'
+
+    post:
+      operationId: createPostmortem
+      summary: Save a betting postmortem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostmortemInput'
+      responses:
+        '201':
+          description: Saved postmortem
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Postmortem'
+
+  /v1/logs/postmortems/{id}:
+    patch:
+      operationId: updatePostmortem
+      summary: Update a saved betting postmortem by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostmortemUpdateInput'
+      responses:
+        '200':
+          description: Postmortem updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Postmortem'
+
+    delete:
+      operationId: deletePostmortem
+      summary: Delete a saved betting postmortem by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Postmortem deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  deleted_id:
+                    type: string
 components:
   schemas:
     ProxyResponse:
+        BetLogEntryInput:
+      type: object
+      properties:
+        date:
+          type: string
+        sport:
+          type: string
+        league:
+          type: string
+        event:
+          type: string
+        market:
+          type: string
+        selection:
+          type: string
+        line:
+          type: string
+          nullable: true
+        odds:
+          type: string
+        sportsbook:
+          type: string
+        stake_usd:
+          type: number
+          nullable: true
+        units:
+          type: number
+          nullable: true
+        is_bonus_bet:
+          type: boolean
+        boost_used:
+          type: boolean
+        ev_percent:
+          type: number
+          nullable: true
+        fair_odds:
+          type: string
+          nullable: true
+        kelly_percent:
+          type: number
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+        result:
+          type: string
+          nullable: true
+        payout_usd:
+          type: number
+          nullable: true
+        closing_line:
+          type: string
+          nullable: true
+        clv_notes:
+          type: string
+          nullable: true
+        postmortem:
+          type: string
+          nullable: true
+      required:
+        - date
+        - sport
+        - league
+        - event
+        - market
+        - selection
+        - odds
+        - sportsbook
+
+    BetLogEntryUpdateInput:
+      type: object
+      properties:
+        closing_line:
+          type: string
+          nullable: true
+        clv_notes:
+          type: string
+          nullable: true
+        result:
+          type: string
+          nullable: true
+        payout_usd:
+          type: number
+          nullable: true
+        postmortem:
+          type: string
+          nullable: true
+        ev_percent:
+          type: number
+          nullable: true
+        fair_odds:
+          type: string
+          nullable: true
+        kelly_percent:
+          type: number
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+
+    BetLogEntry:
+      allOf:
+        - $ref: '#/components/schemas/BetLogEntryInput'
+        - type: object
+          properties:
+            id:
+              type: string
+            created_at:
+              type: string
+              format: date-time
+
+    PostmortemInput:
+      type: object
+      properties:
+        date:
+          type: string
+        summary:
+          type: string
+        best_decisions:
+          type: array
+          items:
+            type: string
+        worst_decisions:
+          type: array
+          items:
+            type: string
+        process_notes:
+          type: array
+          items:
+            type: string
+        adjustments:
+          type: array
+          items:
+            type: string
+      required:
+        - date
+        - summary
+
+    PostmortemUpdateInput:
+      type: object
+      properties:
+        date:
+          type: string
+        summary:
+          type: string
+        best_decisions:
+          type: array
+          items:
+            type: string
+        worst_decisions:
+          type: array
+          items:
+            type: string
+        process_notes:
+          type: array
+          items:
+            type: string
+        adjustments:
+          type: array
+          items:
+            type: string
+
+    Postmortem:
+      allOf:
+        - $ref: '#/components/schemas/PostmortemInput'
+        - type: object
+          properties:
+            id:
+              type: string
+            created_at:
+              type: string
+              format: date-time
       type: object
       properties:
         data:
