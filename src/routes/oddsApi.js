@@ -12,7 +12,7 @@ function requireOddsApiKey() {
 
 router.get('/sports', async (req, res, next) => {
   try {
-    const provider = getOddsProvider();
+    const provider = getOddsProvider('sportsGameOdds');
 
     const result = await provider.getSports({
       all: req.query.all
