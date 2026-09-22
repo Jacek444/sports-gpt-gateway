@@ -138,8 +138,11 @@ router.get('/:sport/events', async (req, res, next) => {
 
 router.get('/:sport/events/:eventId/odds', async (req, res, next) => {
   try {
-    const result = await callOddsApi(
-      `/v4/sports/${req.params.sport}/events/${req.params.eventId}/odds`,
+    const provider = getOddsProvider();
+
+    const result = await provider.getEventOdds(
+      req.params.sport,
+      req.params.eventId,
       {
         regions: req.query.regions || 'us',
         markets: req.query.markets,
@@ -149,6 +152,7 @@ router.get('/:sport/events/:eventId/odds', async (req, res, next) => {
         includeMultipliers: req.query.includeMultipliers
       }
     );
+
     res.json(result);
   } catch (error) {
     next(error);
