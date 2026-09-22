@@ -1,3 +1,4 @@
+import { getOddsProvider } from '../oddsProviders/index.js';
 import express from 'express';
 import { config } from '../config.js';
 import { HttpError } from '../errors.js';
@@ -64,9 +65,12 @@ async function callOddsApi(pathname, params) {
 
 router.get('/sports', async (req, res, next) => {
   try {
-    const result = await callOddsApi('/v4/sports', {
+    const provider = getOddsProvider();
+
+    const result = await provider.getSports({
       all: req.query.all
     });
+
     res.json(result);
   } catch (error) {
     next(error);
