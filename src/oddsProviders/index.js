@@ -1,9 +1,11 @@
 import { config } from '../config.js';
 import { HttpError } from '../errors.js';
 import { theOddsApiProvider } from './theOddsApiProvider.js';
+import { oddsApiIoProvider } from './oddsApiIoProvider.js';
 
 const providers = {
-  theOddsApi: theOddsApiProvider
+  theOddsApi: theOddsApiProvider,
+  oddsApiIo: oddsApiIoProvider
 };
 
 function isConfigured(name) {
