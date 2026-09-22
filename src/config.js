@@ -18,10 +18,25 @@ export const config = {
   port: Number(env('PORT', DEFAULT_PORT)),
   defaultProvider: env('DEFAULT_PROVIDER', 'balldontlie').toLowerCase(),
   mockWhenUnconfigured: envBool('MOCK_WHEN_UNCONFIGURED', true),
-  oddsApi: {
+ oddsProviders: {
+  theOddsApi: {
+    enabled: envBool('THE_ODDS_API_ENABLED', true),
     apiKey: env('ODDS_API_KEY'),
     baseUrl: env('ODDS_API_BASE_URL', 'https://api.the-odds-api.com')
   },
+
+  oddsApiIo: {
+    enabled: envBool('ODDS_API_IO_ENABLED', false),
+    apiKey: env('ODDS_API_IO_KEY'),
+    baseUrl: env('ODDS_API_IO_BASE_URL', 'https://api.odds-api.io')
+  },
+
+  sportsGameOdds: {
+    enabled: envBool('SPORTSGAMEODDS_ENABLED', false),
+    apiKey: env('SPORTSGAMEODDS_API_KEY'),
+    baseUrl: env('SPORTSGAMEODDS_BASE_URL', 'https://api.sportsgameodds.com')
+  }
+},
   ballDontLie: {
     apiKey: env('BALLDONTLIE_API_KEY'),
     baseUrl: env('BALLDONTLIE_BASE_URL', 'https://api.balldontlie.io')
