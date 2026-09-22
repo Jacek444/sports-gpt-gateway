@@ -104,11 +104,14 @@ router.get('/:sport/odds', async (req, res, next) => {
 
 router.get('/:sport/scores', async (req, res, next) => {
   try {
-    const result = await callOddsApi(`/v4/sports/${req.params.sport}/scores`, {
+    const provider = getOddsProvider();
+
+    const result = await provider.getScores(req.params.sport, {
       daysFrom: req.query.daysFrom,
       dateFormat: req.query.dateFormat || 'iso',
       eventIds: req.query.eventIds
     });
+
     res.json(result);
   } catch (error) {
     next(error);
