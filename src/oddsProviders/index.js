@@ -2,10 +2,12 @@ import { config } from '../config.js';
 import { HttpError } from '../errors.js';
 import { theOddsApiProvider } from './theOddsApiProvider.js';
 import { oddsApiIoProvider } from './oddsApiIoProvider.js';
+import { sportsGameOddsProvider } from './sportsGameOddsProvider.js';
 
 const providers = {
   theOddsApi: theOddsApiProvider,
-  oddsApiIo: oddsApiIoProvider
+  oddsApiIo: oddsApiIoProvider,
+  sportsGameOdds: sportsGameOddsProvider
 };
 
 function isConfigured(name) {
