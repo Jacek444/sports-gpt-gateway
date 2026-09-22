@@ -79,7 +79,9 @@ router.get('/sports', async (req, res, next) => {
 
 router.get('/:sport/odds', async (req, res, next) => {
   try {
-    const result = await callOddsApi(`/v4/sports/${req.params.sport}/odds`, {
+    const provider = getOddsProvider();
+
+    const result = await provider.getOddsBoard(req.params.sport, {
       regions: req.query.regions || 'us',
       markets: req.query.markets || 'h2h,spreads,totals',
       oddsFormat: req.query.oddsFormat || 'american',
@@ -93,6 +95,7 @@ router.get('/:sport/odds', async (req, res, next) => {
       includeRotationNumbers: req.query.includeRotationNumbers,
       eventIds: req.query.eventIds
     });
+
     res.json(result);
   } catch (error) {
     next(error);
