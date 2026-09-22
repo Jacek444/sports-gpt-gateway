@@ -38,10 +38,6 @@ export const config = {
   }
 },
 
-  oddsApi: {
-  apiKey: env('ODDS_API_KEY'),
-  baseUrl: env('ODDS_API_BASE_URL', 'https://api.the-odds-api.com')
-},
   ballDontLie: {
     apiKey: env('BALLDONTLIE_API_KEY'),
     baseUrl: env('BALLDONTLIE_BASE_URL', 'https://api.balldontlie.io')
