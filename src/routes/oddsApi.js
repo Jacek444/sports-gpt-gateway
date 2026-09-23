@@ -1,5 +1,6 @@
 import express from 'express';
 import { config } from '../config.js';
+
 import {
   getOddsProvider,
   getOddsProviderStatus,
@@ -9,263 +10,66 @@ import {
   withSpecificOddsProvider
 } from '../oddsProviders/index.js';
 
-const router = express.Router();
+export const oddsApiRouter = express.Router();
 
-router.get('/status', (req, res) => {
+function copyQueryWithoutProvider(query) {
+  const params = {
+    ...query
+  };
+
+  delete params.provider;
+
+  return params;
+}
+
+oddsApiRouter.get('/status', (req, res) => {
   res.json(getOddsProviderStatus());
 });
 
-router.get('/sports', async (req, res, next) => {
+oddsApiRouter.get('/sports', async (req, res, next) => {
   try {
-    const providerName = req.query.provider
-      ? String(req.query.provider)
-      : null;
-
-    const action = (provider) =>
-      provider.getSports({
-        all: req.query.all
-      });
-
-    const result = providerName
-      ? await withSpecificOddsProvider(
-          providerName,
-          action,
-          {
-            cacheKey: `sports:${providerName}`,
-            cacheTtlMs: 10 * 60 * 1000
-          }
-        )
-      : await withOddsProviderFallback(
-          action,
-          {
-            order: config.oddsSportsProviderOrder,
-            cacheKey: 'sports:auto',
-            cacheTtlMs: 10 * 60 * 1000
-          }
-        );
-
-    res.json(result);
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.get('/:sport/odds', async (req, res, next) => {
-  try {
-    const providerName = req.query.provider
-      ? String(req.query.provider)
-      : null;
-
-    const action = (provider) =>
-      provider.getOddsBoard(req.params.sport, {
-        regions: req.query.regions || 'us',
-        markets: req.query.markets || 'h2h,spreads,totals',
-        oddsFormat: req.query.oddsFormat || 'american',
-        dateFormat: req.query.dateFormat || 'iso',
-        bookmakers: req.query.bookmakers,
-        commenceTimeFrom: req.query.commenceTimeFrom,
-        commenceTimeTo: req.query.commenceTimeTo,
-        includeLinks: req.query.includeLinks,
-        includeSids: req.query.includeSids,
-        includeBetLimits: req.query.includeBetLimits,
-        includeRotationNumbers: req.query.includeRotationNumbers,
-        eventIds: req.query.eventIds
-      });
-
-    const cacheKey = [
-      'odds',
-      providerName || 'auto',
-      req.params.sport,
-      req.query.regions || 'us',
-      req.query.markets || 'h2h,spreads,totals',
-      req.query.bookmakers || '',
-      req.query.commenceTimeFrom || '',
-      req.query.commenceTimeTo || '',
-      req.query.eventIds || ''
-    ].join(':');
-
-    const result = providerName
-      ? await withSpecificOddsProvider(
-          providerName,
-          action,
-          {
-            cacheKey,
-            cacheTtlMs: 30 * 1000,
-            rememberEvents: true
-          }
-        )
-      : await withOddsProviderFallback(
-          action,
-          {
-            cacheKey,
-            cacheTtlMs: 30 * 1000,
-            rememberEvents: true
-          }
-        );
-
-    res.json(result);
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.get('/:sport/scores', async (req, res, next) => {
-  try {
-    const providerName = req.query.provider
-      ? String(req.query.provider)
-      : null;
-
-    const action = (provider) =>
-      provider.getScores(req.params.sport, {
-        daysFrom: req.query.daysFrom,
-        dateFormat: req.query.dateFormat || 'iso',
-        eventIds: req.query.eventIds
-      });
-
-    const cacheKey = [
-      'scores',
-      providerName || 'auto',
-      req.params.sport,
-      req.query.daysFrom || '',
-      req.query.eventIds || ''
-    ].join(':');
-
-    const result = providerName
-      ? await withSpecificOddsProvider(
-          providerName,
-          action,
-          {
-            cacheKey,
-            cacheTtlMs: 30 * 1000,
-            rememberEvents: true
-          }
-        )
-      : await withOddsProviderFallback(
-          action,
-          {
-            cacheKey,
-            cacheTtlMs: 30 * 1000,
-            rememberEvents: true
-          }
-        );
-
-    res.json(result);
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.get('/:sport/events', async (req, res, next) => {
-  try {
-    const providerName = req.query.provider
-      ? String(req.query.provider)
-      : null;
-
-    const action = (provider) =>
-      provider.getEvents(req.params.sport, {
-        dateFormat: req.query.dateFormat || 'iso',
-        eventIds: req.query.eventIds,
-        commenceTimeFrom: req.query.commenceTimeFrom,
-        commenceTimeTo: req.query.commenceTimeTo,
-        includeRotationNumbers: req.query.includeRotationNumbers
-      });
-
-    const cacheKey = [
-      'events',
-      providerName || 'auto',
-      req.params.sport,
-      req.query.eventIds || '',
-      req.query.commenceTimeFrom || '',
-      req.query.commenceTimeTo || ''
-    ].join(':');
-
-    const result = providerName
-      ? await withSpecificOddsProvider(
-          providerName,
-          action,
-          {
-            cacheKey,
-            cacheTtlMs: 60 * 1000,
-            rememberEvents: true
-          }
-        )
-      : await withOddsProviderFallback(
-          action,
-          {
-            cacheKey,
-            cacheTtlMs: 60 * 1000,
-            rememberEvents: true
-          }
-        );
-
-    res.json(result);
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.get('/:sport/events/:eventId/odds', async (req, res, next) => {
-  try {
-    const requestedProvider = req.query.provider
-      ? String(req.query.provider)
-      : null;
-
-    const rememberedProvider =
-      getProviderNameForEventId(req.params.eventId);
-
     const providerName =
-      requestedProvider ||
-      rememberedProvider ||
-      null;
+      req.query.provider || null;
 
-    const eventId = unwrapGatewayEventId(req.params.eventId);
-
-    let result;
+    const params =
+      copyQueryWithoutProvider(req.query);
 
     if (providerName) {
-      result = await withSpecificOddsProvider(
-        providerName,
-        (provider) =>
-          provider.getEventOdds(
-            req.params.sport,
-            eventId,
-            {
-              regions: req.query.regions || 'us',
-              markets: req.query.markets,
-              oddsFormat: req.query.oddsFormat || 'american',
-              dateFormat: req.query.dateFormat || 'iso',
-              bookmakers: req.query.bookmakers,
-              includeMultipliers: req.query.includeMultipliers
-            }
-          ),
-        {
-          cacheKey: [
-            'eventOdds',
-            providerName,
-            req.params.sport,
-            eventId,
-            req.query.markets || '',
-            req.query.bookmakers || ''
-          ].join(':'),
-          cacheTtlMs: 30 * 1000
-        }
-      );
-    } else {
-      const provider = getOddsProvider();
+      const result =
+        await withSpecificOddsProvider(
+          providerName,
+          (provider) =>
+            provider.getSports(params),
+          {
+            cacheKey:
+              `sports:${providerName}:${JSON.stringify(params)}`,
+            cacheTtlMs:
+              10 * 60 * 1000,
+            requestType: 'sports'
+          }
+        );
 
-      result = await provider.getEventOdds(
-        req.params.sport,
-        eventId,
+      return res.json(result);
+    }
+
+    const result =
+      await withOddsProviderFallback(
+        (provider) =>
+          provider.getSports(params),
         {
-          regions: req.query.regions || 'us',
-          markets: req.query.markets,
-          oddsFormat: req.query.oddsFormat || 'american',
-          dateFormat: req.query.dateFormat || 'iso',
-          bookmakers: req.query.bookmakers,
-          includeMultipliers: req.query.includeMultipliers
+          order:
+            config.oddsSportsProviderOrder,
+
+          cacheKey:
+            `sports:auto:${JSON.stringify(params)}`,
+
+          cacheTtlMs:
+            10 * 60 * 1000,
+
+          requestType:
+            'sports'
         }
       );
-    }
 
     res.json(result);
   } catch (error) {
@@ -273,4 +77,365 @@ router.get('/:sport/events/:eventId/odds', async (req, res, next) => {
   }
 });
 
-export const oddsApiRouter = router;
+oddsApiRouter.get(
+  '/:sport/odds',
+  async (req, res, next) => {
+    try {
+      const sport =
+        req.params.sport;
+
+      const providerName =
+        req.query.provider || null;
+
+      const params =
+        copyQueryWithoutProvider(
+          req.query
+        );
+
+      if (providerName) {
+        const result =
+          await withSpecificOddsProvider(
+            providerName,
+
+            (provider) =>
+              provider.getOddsBoard(
+                sport,
+                params
+              ),
+
+            {
+              cacheKey:
+                `odds:${providerName}:${sport}:${JSON.stringify(params)}`,
+
+              cacheTtlMs:
+                30 * 1000,
+
+              rememberEvents:
+                true,
+
+              requestType:
+                'odds'
+            }
+          );
+
+        return res.json(result);
+      }
+
+      const result =
+        await withOddsProviderFallback(
+          (provider) =>
+            provider.getOddsBoard(
+              sport,
+              params
+            ),
+
+          {
+            cacheKey:
+              `odds:auto:${sport}:${JSON.stringify(params)}`,
+
+            cacheTtlMs:
+              30 * 1000,
+
+            rememberEvents:
+              true,
+
+            requestType:
+              'odds'
+          }
+        );
+
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+oddsApiRouter.get(
+  '/:sport/scores',
+  async (req, res, next) => {
+    try {
+      const sport =
+        req.params.sport;
+
+      const providerName =
+        req.query.provider || null;
+
+      const params =
+        copyQueryWithoutProvider(
+          req.query
+        );
+
+      if (providerName) {
+        const result =
+          await withSpecificOddsProvider(
+            providerName,
+
+            (provider) =>
+              provider.getScores(
+                sport,
+                params
+              ),
+
+            {
+              cacheKey:
+                `scores:${providerName}:${sport}:${JSON.stringify(params)}`,
+
+              cacheTtlMs:
+                30 * 1000,
+
+              rememberEvents:
+                true,
+
+              requestType:
+                'scores'
+            }
+          );
+
+        return res.json(result);
+      }
+
+      const result =
+        await withOddsProviderFallback(
+          (provider) =>
+            provider.getScores(
+              sport,
+              params
+            ),
+
+          {
+            cacheKey:
+              `scores:auto:${sport}:${JSON.stringify(params)}`,
+
+            cacheTtlMs:
+              30 * 1000,
+
+            rememberEvents:
+              true,
+
+            requestType:
+              'scores'
+          }
+        );
+
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+oddsApiRouter.get(
+  '/:sport/events',
+  async (req, res, next) => {
+    try {
+      const sport =
+        req.params.sport;
+
+      const providerName =
+        req.query.provider || null;
+
+      const params =
+        copyQueryWithoutProvider(
+          req.query
+        );
+
+      if (providerName) {
+        const result =
+          await withSpecificOddsProvider(
+            providerName,
+
+            (provider) =>
+              provider.getEvents(
+                sport,
+                params
+              ),
+
+            {
+              cacheKey:
+                `events:${providerName}:${sport}:${JSON.stringify(params)}`,
+
+              cacheTtlMs:
+                60 * 1000,
+
+              rememberEvents:
+                true,
+
+              requestType:
+                'events'
+            }
+          );
+
+        return res.json(result);
+      }
+
+      const result =
+        await withOddsProviderFallback(
+          (provider) =>
+            provider.getEvents(
+              sport,
+              params
+            ),
+
+          {
+            cacheKey:
+              `events:auto:${sport}:${JSON.stringify(params)}`,
+
+            cacheTtlMs:
+              60 * 1000,
+
+            rememberEvents:
+              true,
+
+            requestType:
+              'events'
+          }
+        );
+
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+oddsApiRouter.get(
+  '/:sport/events/:eventId/odds',
+  async (req, res, next) => {
+    try {
+      const sport =
+        req.params.sport;
+
+      const eventId =
+        req.params.eventId;
+
+      const queryProvider =
+        req.query.provider || null;
+
+      const rememberedProvider =
+        getProviderNameForEventId(
+          eventId
+        );
+
+      const providerName =
+        queryProvider ||
+        rememberedProvider;
+
+      const rawEventId =
+        unwrapGatewayEventId(
+          eventId
+        );
+
+      const params =
+        copyQueryWithoutProvider(
+          req.query
+        );
+
+      if (providerName) {
+        const result =
+          await withSpecificOddsProvider(
+            providerName,
+
+            (provider) =>
+              provider.getEventOdds(
+                sport,
+                rawEventId,
+                params
+              ),
+
+            {
+              cacheKey:
+                `event-odds:${providerName}:${sport}:${rawEventId}:${JSON.stringify(params)}`,
+
+              cacheTtlMs:
+                30 * 1000,
+
+              rememberEvents:
+                true,
+
+              requestType:
+                'event_odds'
+            }
+          );
+
+        return res.json(result);
+      }
+
+      /*
+        Event IDs are provider-specific.
+
+        If we do not know which provider created this ID,
+        use the current primary provider only instead of
+        sending the same event ID across multiple providers.
+      */
+      const provider =
+        getOddsProvider();
+
+      const selectedProviderName =
+        Object.entries({
+          sportsGameOdds:
+            config.oddsProviders
+              .sportsGameOdds,
+
+          parlayApi:
+            config.oddsProviders
+              .parlayApi,
+
+          theOddsApi:
+            config.oddsProviders
+              .theOddsApi,
+
+          oddsApiIo:
+            config.oddsProviders
+              .oddsApiIo
+        }).find(
+          ([name]) => {
+            try {
+              return (
+                getOddsProvider(name) ===
+                provider
+              );
+            } catch {
+              return false;
+            }
+          }
+        )?.[0];
+
+      if (!selectedProviderName) {
+        throw new Error(
+          'Unable to determine odds provider for event'
+        );
+      }
+
+      const result =
+        await withSpecificOddsProvider(
+          selectedProviderName,
+
+          (selectedProvider) =>
+            selectedProvider.getEventOdds(
+              sport,
+              rawEventId,
+              params
+            ),
+
+          {
+            cacheKey:
+              `event-odds:${selectedProviderName}:${sport}:${rawEventId}:${JSON.stringify(params)}`,
+
+            cacheTtlMs:
+              30 * 1000,
+
+            rememberEvents:
+              true,
+
+            requestType:
+              'event_odds'
+          }
+        );
+
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
