@@ -33,7 +33,11 @@ function getState(name) {
       exhaustedUntil: 0,
       lastError: null,
       lastSuccessAt: null,
-      lastQuota: null
+      lastQuota: null,
+      requests: 0,
+      successes: 0,
+      failures: 0,
+      fallbacksTriggered: 0
     });
   }
 
@@ -49,8 +53,10 @@ function isTemporarilyUnavailable(name) {
 
 function rememberQuota(name, result) {
   const state = getState(name);
+
   state.lastSuccessAt = new Date().toISOString();
   state.lastError = null;
+  state.successes += 1;
 
   if (result?.quota) {
     state.lastQuota = result.quota;
@@ -60,6 +66,9 @@ function rememberQuota(name, result) {
 function rememberFailure(name, error) {
   const state = getState(name);
   const now = Date.now();
+
+  state.failures += 1;
+
   const upstreamStatus =
     error?.details?.upstreamStatus ??
     error?.details?.status ??
@@ -74,18 +83,26 @@ function rememberFailure(name, error) {
 
   if (Number(upstreamStatus) === 429) {
     const retrySeconds = Number(error?.details?.retryAfter || 60);
+
     state.disabledUntil =
       now + (Number.isFinite(retrySeconds) ? retrySeconds : 60) * 1000;
   }
 
   const body = error?.details?.body;
 
-  if (
+  const theOddsApiOutOfCredits =
+    Number(upstreamStatus) === 401 &&
+    body &&
+    typeof body === 'object' &&
+    body.error_code === 'OUT_OF_USAGE_CREDITS';
+
+  const genericCreditLimitExceeded =
     Number(upstreamStatus) === 403 &&
     body &&
     typeof body === 'object' &&
-    body.error === 'credit_limit_exceeded'
-  ) {
+    body.error === 'credit_limit_exceeded';
+
+  if (theOddsApiOutOfCredits || genericCreditLimitExceeded) {
     const resetAt = Date.parse(body.next_reset_at || '');
 
     state.exhaustedUntil = Number.isFinite(resetAt)
@@ -114,7 +131,10 @@ function rememberEventIds(result, providerName) {
       continue;
     }
 
-    const rawId = item.provider_event_id || item.eventID || item.id;
+    const rawId =
+      item.provider_event_id ||
+      item.eventID ||
+      item.id;
 
     if (!rawId) {
       continue;
@@ -176,7 +196,10 @@ export function getOddsProvider(
     const provider = providers[name];
 
     if (!provider) {
-      throw new HttpError(400, `Unknown odds provider "${name}"`);
+      throw new HttpError(
+        400,
+        `Unknown odds provider "${name}"`
+      );
     }
 
     if (!isConfigured(name)) {
@@ -186,7 +209,10 @@ export function getOddsProvider(
       );
     }
 
-    if (!ignoreRuntimeState && isTemporarilyUnavailable(name)) {
+    if (
+      !ignoreRuntimeState &&
+      isTemporarilyUnavailable(name)
+    ) {
       throw new HttpError(
         503,
         `Odds provider "${name}" is temporarily unavailable`
@@ -200,8 +226,10 @@ export function getOddsProvider(
     if (
       isConfigured(providerName) &&
       providers[providerName] &&
-      (ignoreRuntimeState ||
-        !isTemporarilyUnavailable(providerName))
+      (
+        ignoreRuntimeState ||
+        !isTemporarilyUnavailable(providerName)
+      )
     ) {
       return providers[providerName];
     }
@@ -279,34 +307,60 @@ export async function withOddsProviderFallback(
     }
 
     const provider = providers[providerName];
+    const state = getState(providerName);
+
+    state.requests += 1;
 
     try {
-      const result = await action(provider, providerName);
+      const result = await action(
+        provider,
+        providerName
+      );
 
       rememberQuota(providerName, result);
 
       if (rememberEvents) {
-        rememberEventIds(result, providerName);
+        rememberEventIds(
+          result,
+          providerName
+        );
+      }
+
+      if (errors.length > 0) {
+        state.fallbacksTriggered += 1;
       }
 
       const output = {
         ...result,
-        provider: result?.provider || providerName,
+        provider:
+          result?.provider ||
+          providerName,
         cache: {
           hit: false
         }
       };
 
-      writeCache(cacheKey, output, cacheTtlMs);
+      writeCache(
+        cacheKey,
+        output,
+        cacheTtlMs
+      );
 
       return output;
     } catch (error) {
-      rememberFailure(providerName, error);
+      rememberFailure(
+        providerName,
+        error
+      );
 
       errors.push({
         provider: providerName,
-        message: error?.message || String(error),
-        status: error?.status || null,
+        message:
+          error?.message ||
+          String(error),
+        status:
+          error?.status ||
+          null,
         upstreamStatus:
           error?.details?.upstreamStatus ??
           error?.details?.status ??
@@ -345,29 +399,51 @@ export async function withSpecificOddsProvider(
   }
 
   const provider = getOddsProvider(providerName);
+  const state = getState(providerName);
+
+  state.requests += 1;
 
   try {
-    const result = await action(provider, providerName);
+    const result = await action(
+      provider,
+      providerName
+    );
 
-    rememberQuota(providerName, result);
+    rememberQuota(
+      providerName,
+      result
+    );
 
     if (rememberEvents) {
-      rememberEventIds(result, providerName);
+      rememberEventIds(
+        result,
+        providerName
+      );
     }
 
     const output = {
       ...result,
-      provider: result?.provider || providerName,
+      provider:
+        result?.provider ||
+        providerName,
       cache: {
         hit: false
       }
     };
 
-    writeCache(cacheKey, output, cacheTtlMs);
+    writeCache(
+      cacheKey,
+      output,
+      cacheTtlMs
+    );
 
     return output;
   } catch (error) {
-    rememberFailure(providerName, error);
+    rememberFailure(
+      providerName,
+      error
+    );
+
     throw error;
   }
 }
@@ -376,33 +452,68 @@ export function getOddsProviderStatus() {
   const names = Object.keys(providers);
 
   return {
-    defaultOrder: config.oddsProviderOrder,
-    sportsOrder: config.oddsSportsProviderOrder,
+    defaultOrder:
+      config.oddsProviderOrder,
+
+    sportsOrder:
+      config.oddsSportsProviderOrder,
 
     providers: Object.fromEntries(
       names.map((name) => {
-        const providerConfig = config.oddsProviders[name];
-        const state = getState(name);
+        const providerConfig =
+          config.oddsProviders[name];
+
+        const state =
+          getState(name);
 
         return [
           name,
           {
-            enabled: Boolean(providerConfig?.enabled),
-            configured: isConfigured(name),
+            enabled:
+              Boolean(
+                providerConfig?.enabled
+              ),
+
+            configured:
+              isConfigured(name),
+
             temporarilyUnavailable:
               isTemporarilyUnavailable(name),
 
-            disabledUntil: state.disabledUntil
-              ? new Date(state.disabledUntil).toISOString()
-              : null,
+            disabledUntil:
+              state.disabledUntil
+                ? new Date(
+                    state.disabledUntil
+                  ).toISOString()
+                : null,
 
-            exhaustedUntil: state.exhaustedUntil
-              ? new Date(state.exhaustedUntil).toISOString()
-              : null,
+            exhaustedUntil:
+              state.exhaustedUntil
+                ? new Date(
+                    state.exhaustedUntil
+                  ).toISOString()
+                : null,
 
-            lastSuccessAt: state.lastSuccessAt,
-            lastError: state.lastError,
-            lastQuota: state.lastQuota
+            lastSuccessAt:
+              state.lastSuccessAt,
+
+            lastError:
+              state.lastError,
+
+            lastQuota:
+              state.lastQuota,
+
+            requests:
+              state.requests,
+
+            successes:
+              state.successes,
+
+            failures:
+              state.failures,
+
+            fallbacksTriggered:
+              state.fallbacksTriggered
           }
         ];
       })
