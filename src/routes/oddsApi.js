@@ -19,25 +19,219 @@ function copyQueryWithoutProvider(query) {
   };
 
   delete params.provider;
+  delete params.raw;
 
   return params;
 }
 
-oddsApiRouter.get('/status', async (req, res, next) => {
-  try {
-    const runtime = getOddsProviderStatus();
-
-    const history =
-      await getOddsProviderUsageSummary();
-
-    res.json({
-      runtime,
-      history
-    });
-  } catch (error) {
-    next(error);
+function firstValue(...values) {
+  for (const value of values) {
+    if (
+      value !== undefined &&
+      value !== null &&
+      value !== ''
+    ) {
+      return value;
+    }
   }
-});
+
+  return null;
+}
+
+function teamName(value) {
+  if (!value) {
+    return null;
+  }
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (typeof value === 'object') {
+    return firstValue(
+      value.name,
+      value.fullName,
+      value.displayName,
+      value.title,
+      value.nickname,
+      value.abbreviation,
+      value.id
+    );
+  }
+
+  return String(value);
+}
+
+function compactEvent(event, providerName) {
+  if (!event || typeof event !== 'object') {
+    return null;
+  }
+
+  const teams =
+    event.teams &&
+    typeof event.teams === 'object'
+      ? event.teams
+      : {};
+
+  const homeTeam =
+    firstValue(
+      event.home_team,
+      event.homeTeam,
+      event.home,
+      teams.home,
+      event.homeTeamName
+    );
+
+  const awayTeam =
+    firstValue(
+      event.away_team,
+      event.awayTeam,
+      event.away,
+      teams.away,
+      event.awayTeamName
+    );
+
+  const commenceTime =
+    firstValue(
+      event.commence_time,
+      event.commenceTime,
+      event.start_time,
+      event.startTime,
+      event.startsAt,
+      event.starts_at,
+      event.scheduled,
+      event.scheduledAt,
+      event.eventTime,
+      event.date
+    );
+
+  const status =
+    firstValue(
+      event.status,
+      event.eventStatus,
+      event.gameStatus,
+      event.state,
+      event.statusText,
+      event.phase
+    );
+
+  const providerEventId =
+    firstValue(
+      event.provider_event_id,
+      event.eventID,
+      event.eventId,
+      event.id
+    );
+
+  const gatewayEventId =
+    firstValue(
+      event.gateway_event_id,
+      providerEventId
+        ? `${providerName}:${providerEventId}`
+        : null
+    );
+
+  return {
+    gateway_event_id:
+      gatewayEventId,
+
+    provider_event_id:
+      providerEventId
+        ? String(providerEventId)
+        : null,
+
+    provider:
+      providerName,
+
+    home_team:
+      teamName(homeTeam),
+
+    away_team:
+      teamName(awayTeam),
+
+    commence_time:
+      commenceTime,
+
+    status:
+      typeof status === 'object'
+        ? firstValue(
+            status.display,
+            status.name,
+            status.code,
+            status.state
+          )
+        : status
+  };
+}
+
+function compactEventResponse(result) {
+  const providerName =
+    result?.provider || 'unknown';
+
+  let events = [];
+
+  if (Array.isArray(result?.data)) {
+    events = result.data;
+  } else if (
+    Array.isArray(result?.data?.events)
+  ) {
+    events = result.data.events;
+  } else if (
+    result?.data &&
+    typeof result.data === 'object'
+  ) {
+    events = [result.data];
+  }
+
+  const compactEvents =
+    events
+      .map((event) =>
+        compactEvent(
+          event,
+          providerName
+        )
+      )
+      .filter(Boolean);
+
+  return {
+    provider:
+      providerName,
+
+    data:
+      compactEvents,
+
+    count:
+      compactEvents.length,
+
+    quota:
+      result?.quota || null,
+
+    cache:
+      result?.cache || {
+        hit: false
+      }
+  };
+}
+
+oddsApiRouter.get(
+  '/status',
+  async (req, res, next) => {
+    try {
+      const runtime =
+        getOddsProviderStatus();
+
+      const history =
+        await getOddsProviderUsageSummary();
+
+      res.json({
+        runtime,
+        history
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 oddsApiRouter.get(
   '/sports',
@@ -263,13 +457,20 @@ oddsApiRouter.get(
       const providerName =
         req.query.provider || null;
 
+      const rawMode =
+        String(
+          req.query.raw || ''
+        ).toLowerCase() === 'true';
+
       const params =
         copyQueryWithoutProvider(
           req.query
         );
 
+      let result;
+
       if (providerName) {
-        const result =
+        result =
           await withSpecificOddsProvider(
             providerName,
 
@@ -293,34 +494,45 @@ oddsApiRouter.get(
                 'events'
             }
           );
+      } else {
+        result =
+          await withOddsProviderFallback(
+            (provider) =>
+              provider.getEvents(
+                sport,
+                params
+              ),
 
+            {
+              cacheKey:
+                `events:auto:${sport}:${JSON.stringify(params)}`,
+
+              cacheTtlMs:
+                60 * 1000,
+
+              rememberEvents:
+                true,
+
+              requestType:
+                'events'
+            }
+          );
+      }
+
+      /*
+        Raw mode is available only for debugging.
+
+        Normal SharpBet requests receive the compact slate
+        so an entire league/day can fit inside a GPT action
+        response.
+      */
+      if (rawMode) {
         return res.json(result);
       }
 
-      const result =
-        await withOddsProviderFallback(
-          (provider) =>
-            provider.getEvents(
-              sport,
-              params
-            ),
-
-          {
-            cacheKey:
-              `events:auto:${sport}:${JSON.stringify(params)}`,
-
-            cacheTtlMs:
-              60 * 1000,
-
-            rememberEvents:
-              true,
-
-            requestType:
-              'events'
-          }
-        );
-
-      res.json(result);
+      res.json(
+        compactEventResponse(result)
+      );
     } catch (error) {
       next(error);
     }
@@ -390,35 +602,20 @@ oddsApiRouter.get(
       }
 
       /*
-        Event IDs are provider-specific.
+        Event IDs belong to individual providers.
 
-        If we do not know which provider created the ID,
-        use the current primary provider only instead of
-        sending the same event ID across several providers.
+        If the event ID does not tell us which provider
+        created it, use the current primary provider only.
       */
 
       const provider =
         getOddsProvider();
 
       const selectedProviderName =
-        Object.entries({
-          sportsGameOdds:
-            config.oddsProviders
-              .sportsGameOdds,
-
-          parlayApi:
-            config.oddsProviders
-              .parlayApi,
-
-          theOddsApi:
-            config.oddsProviders
-              .theOddsApi,
-
-          oddsApiIo:
-            config.oddsProviders
-              .oddsApiIo
-        }).find(
-          ([name]) => {
+        Object.keys(
+          config.oddsProviders
+        ).find(
+          (name) => {
             try {
               return (
                 getOddsProvider(name) ===
@@ -428,7 +625,7 @@ oddsApiRouter.get(
               return false;
             }
           }
-        )?.[0];
+        );
 
       if (!selectedProviderName) {
         throw new Error(
