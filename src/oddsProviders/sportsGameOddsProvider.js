@@ -1,6 +1,19 @@
 import { config } from '../config.js';
 import { HttpError } from '../errors.js';
 
+const LEAGUE_MAP = {
+  basketball_nba: 'NBA',
+  americanfootball_nfl: 'NFL',
+  baseball_mlb: 'MLB',
+  icehockey_nhl: 'NHL',
+  basketball_ncaab: 'NCAAB',
+  americanfootball_ncaaf: 'NCAAF'
+};
+
+function toLeagueID(sport) {
+  return LEAGUE_MAP[sport] || sport;
+}
+
 function requireApiKey() {
   const providerConfig = config.oddsProviders.sportsGameOdds;
 
@@ -64,12 +77,12 @@ export const sportsGameOddsProvider = {
     return call('/v2/sports', params);
   },
 
-  getEvents(leagueID, params = {}) {
-    return call('/v2/events', {
-      leagueID,
-      ...params
-    });
-  },
+ getEvents(sport, params = {}) {
+  return call('/v2/events', {
+    leagueID: toLeagueID(sport),
+    ...params
+  });
+},
 
   getEventOdds(eventID, params = {}) {
     return call('/v2/events', {
@@ -78,19 +91,18 @@ export const sportsGameOddsProvider = {
       ...params
     });
   },
-
-  getScores(leagueID, params = {}) {
-    return call('/v2/events', {
-      leagueID,
-      ...params
-    });
-  },
-
-  getOddsBoard(leagueID, params = {}) {
-    return call('/v2/events', {
-      leagueID,
-      oddsAvailable: true,
-      ...params
-    });
-  }
-};
+  
+getScores(sport, params = {}) {
+  return call('/v2/events', {
+    leagueID: toLeagueID(sport),
+    ...params
+  });
+},
+  
+getOddsBoard(sport, params = {}) {
+  return call('/v2/events', {
+    leagueID: toLeagueID(sport),
+    oddsAvailable: true,
+    ...params
+  });
+}
