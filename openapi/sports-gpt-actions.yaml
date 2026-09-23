@@ -1,40 +1,47 @@
-openapi: 3.1.0
+openapi: 3.0.3
+
 info:
-  title: Sports GPT Gateway
-  version: 1.0.0
+  title: SharpBet Sports GPT Gateway
+  version: 2.0.0
   description: >
-    Unified sports data API for NBA, NFL, NCAA men's basketball, NCAA football,
-    MLB, and NHL. Designed for GPT Actions.
+    Unified SharpBet sports data gateway for NBA, NFL, NCAAM, NCAAF, MLB,
+    and NHL. Includes odds, scores, events, event-specific odds, provider
+    fallback status, persistent provider usage history, betting logs,
+    and postmortems.
+
 servers:
- - url: https://sports-gpt-gateway.onrender.com
-    description: Sports GPT Gateway on Render
+  - url: https://sports-gpt-gateway.onrender.com
+    description: SharpBet Sports GPT Gateway on Render
+
 tags:
+  - name: System
   - name: Sports
+  - name: Odds
+  - name: Betting Logs
+
 paths:
+
   /health:
     get:
       operationId: healthCheck
-      tags: [Sports]
-      summary: Health check
+      tags:
+        - System
+      summary: Check gateway health and provider configuration
       responses:
         '200':
-          description: Service health
+          description: Gateway health
           content:
             application/json:
               schema:
                 type: object
-                properties:
-                  ok:
-                    type: boolean
-                  provider_defaults:
-                    type: object
-                    additionalProperties:
-                      type: string
+                additionalProperties: true
+
   /v1/leagues:
     get:
       operationId: listLeagues
-      tags: [Sports]
-      summary: List supported leagues
+      tags:
+        - Sports
+      summary: List supported sports leagues
       responses:
         '200':
           description: Supported leagues
@@ -47,17 +54,20 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/League'
+
   /v1/games:
     get:
       operationId: listGames
-      tags: [Sports]
-      summary: List games for a league and optional date
+      tags:
+        - Sports
+      summary: List games for a league
       parameters:
         - in: query
           name: league
           required: true
           schema:
             $ref: '#/components/schemas/LeagueCode'
+
         - in: query
           name: date
           required: false
@@ -65,30 +75,38 @@ paths:
           schema:
             type: string
             format: date
+
         - in: query
           name: season
           required: false
           schema:
             type: integer
+
         - in: query
           name: week
           required: false
-          description: Mainly used by NFL and NCAAF
+          description: Primarily used for NFL and NCAAF
           schema:
             type: integer
+
         - in: query
           name: team
           required: false
-          description: Team abbreviation, team name, or provider team ID
+          description: Team abbreviation, name, or provider team ID
           schema:
             type: string
+
         - in: query
           name: status
           required: false
-          description: Filter by normalized status
           schema:
             type: string
-            enum: [scheduled, live, final, postponed]
+            enum:
+              - scheduled
+              - live
+              - final
+              - postponed
+
         - in: query
           name: limit
           required: false
@@ -97,11 +115,13 @@ paths:
             minimum: 1
             maximum: 100
             default: 25
+
         - in: query
           name: cursor
           required: false
           schema:
             type: string
+
       responses:
         '200':
           description: Games
@@ -109,19 +129,16 @@ paths:
             application/json:
               schema:
                 type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Game'
-                  meta:
-                    $ref: '#/components/schemas/PaginationMeta'
+                additionalProperties: true
+
         '400':
           $ref: '#/components/responses/BadRequest'
+
   /v1/games/{league}/{gameId}:
     get:
       operationId: getGame
-      tags: [Sports]
+      tags:
+        - Sports
       summary: Get a specific game
       parameters:
         - in: path
@@ -129,11 +146,13 @@ paths:
           required: true
           schema:
             $ref: '#/components/schemas/LeagueCode'
+
         - in: path
           name: gameId
           required: true
           schema:
             type: string
+
       responses:
         '200':
           description: Game detail
@@ -141,17 +160,19 @@ paths:
             application/json:
               schema:
                 type: object
-                properties:
-                  data:
-                    $ref: '#/components/schemas/Game'
+                additionalProperties: true
+
         '400':
           $ref: '#/components/responses/BadRequest'
+
         '404':
           $ref: '#/components/responses/NotFound'
+
   /v1/teams:
     get:
       operationId: listTeams
-      tags: [Sports]
+      tags:
+        - Sports
       summary: List teams for a league
       parameters:
         - in: query
@@ -159,12 +180,14 @@ paths:
           required: true
           schema:
             $ref: '#/components/schemas/LeagueCode'
+
         - in: query
           name: search
           required: false
           description: Team name, city, college, or abbreviation
           schema:
             type: string
+
         - in: query
           name: limit
           required: false
@@ -173,6 +196,7 @@ paths:
             minimum: 1
             maximum: 100
             default: 50
+
       responses:
         '200':
           description: Teams
@@ -180,17 +204,16 @@ paths:
             application/json:
               schema:
                 type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Team'
+                additionalProperties: true
+
         '400':
           $ref: '#/components/responses/BadRequest'
+
   /v1/standings:
     get:
       operationId: listStandings
-      tags: [Sports]
+      tags:
+        - Sports
       summary: Get standings for a league and season
       parameters:
         - in: query
@@ -198,40 +221,333 @@ paths:
           required: true
           schema:
             $ref: '#/components/schemas/LeagueCode'
+
         - in: query
           name: season
           required: false
           schema:
             type: integer
+
         - in: query
           name: conference
           required: false
           schema:
             type: string
+
         - in: query
           name: division
           required: false
           schema:
             type: string
+
       responses:
         '200':
-          description: Standings rows
+          description: Standings
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /v1/odds/status:
+    get:
+      operationId: getOddsProviderStatus
+      tags:
+        - Odds
+      summary: Get odds provider runtime status and persistent usage history
+      description: >
+        Returns current runtime status plus persistent Supabase usage history
+        for SportsGameOdds, ParlayAPI, The Odds API, and any other configured
+        providers. Includes request counts, successes, failures, fallbacks,
+        cache information, last success, last error, and quota information.
+      responses:
+        '200':
+          description: Odds provider status and history
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/StandingRow'
-        '400':
-          $ref: '#/components/responses/BadRequest'
+                  runtime:
+                    type: object
+                    additionalProperties: true
+                  history:
+                    type: object
+                    additionalProperties: true
+                additionalProperties: true
+
+  /v1/odds/sports:
+    get:
+      operationId: listOddsSports
+      tags:
+        - Odds
+      summary: List sports supported by the odds gateway
+      description: >
+        Uses the gateway's configured sports-provider order. The backend
+        handles provider selection and fallback.
+      parameters:
+        - $ref: '#/components/parameters/OddsProvider'
+
+      responses:
+        '200':
+          description: Supported sports
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FlexibleOddsResponse'
+
+  /v1/odds/{sport}/odds:
+    get:
+      operationId: getOddsBoard
+      tags:
+        - Odds
+      summary: Get the odds board for a sport
+      description: >
+        Uses SharpBet's gateway provider chain. By default the backend tries
+        SportsGameOdds first, then ParlayAPI, then The Odds API when available.
+        A provider can optionally be specified for direct testing.
+      parameters:
+        - $ref: '#/components/parameters/SportPath'
+
+        - $ref: '#/components/parameters/OddsProvider'
+
+        - in: query
+          name: regions
+          required: false
+          description: Sportsbook region when supported by the selected provider
+          schema:
+            type: string
+
+        - in: query
+          name: markets
+          required: false
+          description: >
+            Comma-separated markets such as h2h, spreads, totals, props,
+            alternates, or other provider-supported markets
+          schema:
+            type: string
+
+        - in: query
+          name: oddsFormat
+          required: false
+          schema:
+            type: string
+            enum:
+              - american
+              - decimal
+
+        - in: query
+          name: dateFormat
+          required: false
+          schema:
+            type: string
+            enum:
+              - iso
+              - unix
+
+        - in: query
+          name: bookmakers
+          required: false
+          description: Comma-separated sportsbook or bookmaker filter
+          schema:
+            type: string
+
+        - in: query
+          name: commenceTimeFrom
+          required: false
+          schema:
+            type: string
+
+        - in: query
+          name: commenceTimeTo
+          required: false
+          schema:
+            type: string
+
+        - in: query
+          name: eventIds
+          required: false
+          schema:
+            type: string
+
+      responses:
+        '200':
+          description: Current odds board
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FlexibleOddsResponse'
+
+        '502':
+          $ref: '#/components/responses/UpstreamFailure'
+
+  /v1/odds/{sport}/scores:
+    get:
+      operationId: getOddsScores
+      tags:
+        - Odds
+      summary: Get live, recent, or upcoming scores for a sport
+      parameters:
+        - $ref: '#/components/parameters/SportPath'
+
+        - $ref: '#/components/parameters/OddsProvider'
+
+        - in: query
+          name: daysFrom
+          required: false
+          description: Number of days of score history when supported
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 3
+
+        - in: query
+          name: dateFormat
+          required: false
+          schema:
+            type: string
+            enum:
+              - iso
+              - unix
+
+      responses:
+        '200':
+          description: Scores
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FlexibleOddsResponse'
+
+        '502':
+          $ref: '#/components/responses/UpstreamFailure'
+
+  /v1/odds/{sport}/events:
+    get:
+      operationId: getOddsEvents
+      tags:
+        - Odds
+      summary: Get events for a sport
+      description: >
+        Returns events from the gateway and may include gateway_event_id and
+        provider_event_id fields for later event-specific odds calls.
+      parameters:
+        - $ref: '#/components/parameters/SportPath'
+
+        - $ref: '#/components/parameters/OddsProvider'
+
+        - in: query
+          name: dateFormat
+          required: false
+          schema:
+            type: string
+            enum:
+              - iso
+              - unix
+
+        - in: query
+          name: commenceTimeFrom
+          required: false
+          schema:
+            type: string
+
+        - in: query
+          name: commenceTimeTo
+          required: false
+          schema:
+            type: string
+
+      responses:
+        '200':
+          description: Events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FlexibleOddsResponse'
+
+        '502':
+          $ref: '#/components/responses/UpstreamFailure'
+
+  /v1/odds/{sport}/events/{eventId}/odds:
+    get:
+      operationId: getOddsForEvent
+      tags:
+        - Odds
+      summary: Get odds for a single event
+      description: >
+        Retrieves event-specific odds including props, alternate markets,
+        or other supported markets. Gateway event IDs are provider-aware.
+      parameters:
+        - $ref: '#/components/parameters/SportPath'
+
+        - in: path
+          name: eventId
+          required: true
+          description: Provider event ID or gateway_event_id
+          schema:
+            type: string
+
+        - $ref: '#/components/parameters/OddsProvider'
+
+        - in: query
+          name: regions
+          required: false
+          schema:
+            type: string
+
+        - in: query
+          name: markets
+          required: true
+          description: >
+            Market or comma-separated markets to request, such as h2h,
+            spreads, totals, player props, alternate lines, or other
+            provider-supported event markets
+          schema:
+            type: string
+
+        - in: query
+          name: oddsFormat
+          required: false
+          schema:
+            type: string
+            enum:
+              - american
+              - decimal
+
+        - in: query
+          name: dateFormat
+          required: false
+          schema:
+            type: string
+            enum:
+              - iso
+              - unix
+
+        - in: query
+          name: bookmakers
+          required: false
+          schema:
+            type: string
+
+      responses:
+        '200':
+          description: Event-specific odds
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FlexibleOddsResponse'
+
+        '502':
+          $ref: '#/components/responses/UpstreamFailure'
+
   /v1/logs/bet-log:
     get:
       operationId: listBetLogEntries
-      tags: [Sports]
-      summary: List saved betting log entries
+      tags:
+        - Betting Logs
+      summary: Get saved SharpBet betting log entries
       responses:
         '200':
           description: Betting log entries
@@ -244,16 +560,19 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/BetLogEntry'
+
     post:
       operationId: createBetLogEntry
-      tags: [Sports]
-      summary: Save a betting log entry
+      tags:
+        - Betting Logs
+      summary: Save a SharpBet betting log entry
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/BetLogEntryInput'
+
       responses:
         '201':
           description: Betting log entry created
@@ -264,12 +583,15 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/BetLogEntry'
+
         '400':
           $ref: '#/components/responses/BadRequest'
-            /v1/logs/bet-log/{id}:
+
+  /v1/logs/bet-log/{id}:
     patch:
       operationId: updateBetLogEntry
-      tags: [Sports]
+      tags:
+        - Betting Logs
       summary: Update a saved betting log entry
       parameters:
         - in: path
@@ -277,12 +599,14 @@ paths:
           required: true
           schema:
             type: string
+
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/BetLogEntryUpdate'
+
       responses:
         '200':
           description: Betting log entry updated
@@ -295,14 +619,17 @@ paths:
                     type: boolean
                   data:
                     $ref: '#/components/schemas/BetLogEntry'
+
         '400':
           $ref: '#/components/responses/BadRequest'
+
         '404':
           $ref: '#/components/responses/NotFound'
 
     delete:
       operationId: deleteBetLogEntry
-      tags: [Sports]
+      tags:
+        - Betting Logs
       summary: Delete a saved betting log entry
       parameters:
         - in: path
@@ -310,6 +637,7 @@ paths:
           required: true
           schema:
             type: string
+
       responses:
         '200':
           description: Betting log entry deleted
@@ -322,13 +650,16 @@ paths:
                     type: boolean
                   deleted_id:
                     type: string
+
         '404':
           $ref: '#/components/responses/NotFound'
+
   /v1/logs/postmortems:
     get:
       operationId: listPostmortems
-      tags: [Sports]
-      summary: List saved betting postmortems
+      tags:
+        - Betting Logs
+      summary: Get saved SharpBet betting postmortems
       responses:
         '200':
           description: Betting postmortems
@@ -341,16 +672,19 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/PostmortemEntry'
+
     post:
       operationId: createPostmortem
-      tags: [Sports]
-      summary: Save a betting postmortem
+      tags:
+        - Betting Logs
+      summary: Save a SharpBet betting postmortem
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PostmortemEntryInput'
+
       responses:
         '201':
           description: Betting postmortem created
@@ -361,12 +695,15 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/PostmortemEntry'
+
         '400':
           $ref: '#/components/responses/BadRequest'
-            /v1/logs/postmortems/{id}:
+
+  /v1/logs/postmortems/{id}:
     patch:
       operationId: updatePostmortem
-      tags: [Sports]
+      tags:
+        - Betting Logs
       summary: Update a saved betting postmortem
       parameters:
         - in: path
@@ -374,12 +711,14 @@ paths:
           required: true
           schema:
             type: string
+
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PostmortemEntryUpdate'
+
       responses:
         '200':
           description: Betting postmortem updated
@@ -392,14 +731,17 @@ paths:
                     type: boolean
                   data:
                     $ref: '#/components/schemas/PostmortemEntry'
+
         '400':
           $ref: '#/components/responses/BadRequest'
+
         '404':
           $ref: '#/components/responses/NotFound'
 
     delete:
       operationId: deletePostmortem
-      tags: [Sports]
+      tags:
+        - Betting Logs
       summary: Delete a saved betting postmortem
       parameters:
         - in: path
@@ -407,6 +749,7 @@ paths:
           required: true
           schema:
             type: string
+
       responses:
         '200':
           description: Betting postmortem deleted
@@ -419,26 +762,75 @@ paths:
                     type: boolean
                   deleted_id:
                     type: string
+
         '404':
           $ref: '#/components/responses/NotFound'
+
 components:
+
+  parameters:
+
+    SportPath:
+      in: path
+      name: sport
+      required: true
+      description: >
+        Odds gateway sport key, for example basketball_nba,
+        americanfootball_nfl, baseball_mlb, icehockey_nhl,
+        basketball_ncaab, or americanfootball_ncaaf.
+      schema:
+        type: string
+
+    OddsProvider:
+      in: query
+      name: provider
+      required: false
+      description: >
+        Optional direct provider override. Leave blank for the normal
+        SharpBet fallback chain.
+      schema:
+        type: string
+        enum:
+          - sportsGameOdds
+          - parlayApi
+          - theOddsApi
+          - oddsApiIo
+
   responses:
+
     BadRequest:
       description: Invalid request
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+
     NotFound:
       description: Resource not found
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+
+    UpstreamFailure:
+      description: One or more upstream sports or odds providers failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
   schemas:
+
     LeagueCode:
       type: string
-      enum: [NBA, NFL, NCAAM, NCAAF, MLB, NHL]
+      enum:
+        - NBA
+        - NFL
+        - NCAAM
+        - NCAAF
+        - MLB
+        - NHL
+
     League:
       type: object
       properties:
@@ -450,129 +842,37 @@ components:
           type: string
         notes:
           type: string
-      required: [code, name]
-    Team:
+      required:
+        - code
+        - name
+
+    FlexibleOddsResponse:
       type: object
+      description: >
+        Flexible provider-normalized odds gateway response. The exact data
+        payload may differ by provider and market.
       properties:
-        id:
-          type: string
-        league:
-          $ref: '#/components/schemas/LeagueCode'
-        name:
-          type: string
-        short_name:
-          type: string
-        market:
-          type: string
-          nullable: true
-        abbreviation:
-          type: string
-        conference:
-          type: string
-          nullable: true
-        division:
-          type: string
-          nullable: true
-      required: [id, league, name, abbreviation]
-    GameStatus:
-      type: object
-      properties:
-        code:
-          type: string
-          enum: [scheduled, live, final, postponed, unknown]
-        display:
-          type: string
-        is_live:
-          type: boolean
-        period:
-          type: integer
-          nullable: true
-        clock:
-          type: string
-          nullable: true
-      required: [code, display, is_live]
-    GameScore:
-      type: object
-      properties:
-        home:
-          type: integer
-          nullable: true
-        away:
-          type: integer
-          nullable: true
-    Game:
-      type: object
-      properties:
-        id:
-          type: string
-        league:
-          $ref: '#/components/schemas/LeagueCode'
         provider:
           type: string
-        season:
-          type: integer
+
+        data:
+          description: Provider response data
           nullable: true
-        week:
-          type: integer
+
+        quota:
+          type: object
           nullable: true
-        start_time:
-          type: string
-          format: date-time
-          nullable: true
-        status:
-          $ref: '#/components/schemas/GameStatus'
-        home_team:
-          $ref: '#/components/schemas/Team'
-        away_team:
-          $ref: '#/components/schemas/Team'
-        score:
-          $ref: '#/components/schemas/GameScore'
-        venue:
-          type: string
-          nullable: true
-      required: [id, league, provider, status, home_team, away_team, score]
-    StandingRow:
-      type: object
-      properties:
-        team:
-          $ref: '#/components/schemas/Team'
-        wins:
-          type: integer
-          nullable: true
-        losses:
-          type: integer
-          nullable: true
-        ties:
-          type: integer
-          nullable: true
-        pct:
-          type: number
-          nullable: true
-        rank:
-          type: integer
-          nullable: true
-        conference:
-          type: string
-          nullable: true
-        division:
-          type: string
-          nullable: true
-        streak:
-          type: string
-          nullable: true
-      required: [team]
-    PaginationMeta:
-      type: object
-      properties:
-        cursor:
-          type: string
-          nullable: true
-        next_cursor:
-          type: string
-          nullable: true
-        per_page:
-          type: integer
-          nullable: true
+          additionalProperties: true
+
+        cache:
+          type: object
+          properties:
+            hit:
+              type: boolean
+          additionalProperties: true
+
+      additionalProperties: true
+
     ErrorResponse:
       type: object
       properties:
@@ -583,96 +883,138 @@ components:
               type: string
             status:
               type: integer
-          required: [message, status]
-      required: [error]
+            details:
+              nullable: true
+          required:
+            - message
+      required:
+        - error
+
     BetLogEntryInput:
       type: object
       properties:
         date:
           type: string
+
         sport:
           type: string
+
         league:
           type: string
+
         event:
           type: string
+
         market:
           type: string
+
         selection:
           type: string
+
         line:
-          type: string
           nullable: true
+
         odds:
           type: string
+
         sportsbook:
           type: string
+
         stake_usd:
           type: number
+          nullable: true
+
         units:
           type: number
+          nullable: true
+
         is_bonus_bet:
           type: boolean
+
         boost_used:
           type: boolean
+
         ev_percent:
           type: number
           nullable: true
+
         fair_odds:
-          type: string
           nullable: true
+
         kelly_percent:
           type: number
           nullable: true
+
         reason:
           type: string
           nullable: true
+
         result:
           type: string
           nullable: true
+
         payout_usd:
           type: number
           nullable: true
+
         closing_line:
-          type: string
           nullable: true
+
         clv_notes:
           type: string
           nullable: true
+
         postmortem:
           type: string
           nullable: true
-      required: [date, sport, league, event, market, selection, odds, sportsbook]
-          BetLogEntryUpdate:
+
+      required:
+        - date
+        - sport
+        - league
+        - event
+        - market
+        - selection
+        - odds
+        - sportsbook
+
+    BetLogEntryUpdate:
       type: object
       properties:
         closing_line:
-          type: string
           nullable: true
+
         clv_notes:
           type: string
           nullable: true
+
         result:
           type: string
           nullable: true
+
         payout_usd:
           type: number
           nullable: true
+
         postmortem:
           type: string
           nullable: true
+
         ev_percent:
           type: number
           nullable: true
+
         fair_odds:
-          type: string
           nullable: true
+
         kelly_percent:
           type: number
           nullable: true
+
         reason:
           type: string
           nullable: true
+
     BetLogEntry:
       allOf:
         - $ref: '#/components/schemas/BetLogEntryInput'
@@ -680,57 +1022,77 @@ components:
           properties:
             id:
               type: string
+
             created_at:
               type: string
               format: date-time
-          required: [id, created_at]
+
+          required:
+            - id
+            - created_at
+
     PostmortemEntryInput:
       type: object
       properties:
         date:
           type: string
+
         summary:
           type: string
+
         best_decisions:
           type: array
           items:
             type: string
+
         worst_decisions:
           type: array
           items:
             type: string
+
         process_notes:
           type: array
           items:
             type: string
+
         adjustments:
           type: array
           items:
             type: string
-      required: [date, summary]
-          PostmortemEntryUpdate:
+
+      required:
+        - date
+        - summary
+
+    PostmortemEntryUpdate:
       type: object
       properties:
         date:
           type: string
+
         summary:
           type: string
+
         best_decisions:
           type: array
           items:
             type: string
+
         worst_decisions:
           type: array
           items:
             type: string
+
         process_notes:
           type: array
           items:
             type: string
+
         adjustments:
           type: array
           items:
             type: string
+
     PostmortemEntry:
       allOf:
         - $ref: '#/components/schemas/PostmortemEntryInput'
@@ -738,7 +1100,11 @@ components:
           properties:
             id:
               type: string
+
             created_at:
               type: string
               format: date-time
-          required: [id, created_at]
+
+          required:
+            - id
+            - created_at
