@@ -35,15 +35,15 @@ export const config = {
     enabled: envBool('SPORTSGAMEODDS_ENABLED', false),
     apiKey: env('SPORTSGAMEODDS_API_KEY'),
     baseUrl: env('SPORTSGAMEODDS_BASE_URL', 'https://api.sportsgameodds.com')
+  },
+
+  parlayApi: {
+    enabled: envBool('PARLAY_API_ENABLED', false),
+    apiKey: env('PARLAY_API_KEY'),
+    baseUrl: env('PARLAY_API_BASE_URL', 'https://parlay-api.com')
   }
 },
-  
-parlayApi: {
-  enabled: envBool('PARLAY_API_ENABLED', false),
-  apiKey: env('PARLAY_API_KEY'),
-  baseUrl: env('PARLAY_API_BASE_URL', 'https://parlay-api.com')
-}
-  
+
   ballDontLie: {
     apiKey: env('BALLDONTLIE_API_KEY'),
     baseUrl: env('BALLDONTLIE_BASE_URL', 'https://api.balldontlie.io')
