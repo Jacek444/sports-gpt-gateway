@@ -279,23 +279,24 @@ export const sportsGameOddsProvider = {
     );
   },
 
-  async getEvents(
-    sport,
-    params = {}
-  ) {
-    const leagueID =
-      leagueForSport(sport);
+ async getEvents(
+  sport,
+  params = {}
+) {
+  const leagueID =
+    leagueForSport(sport);
 
-    return callSportsGameOdds(
-      '/v2/events',
-      {
-        leagueID,
-        ...cleanSharedParams(
-          params
-        )
-      }
-    );
-  },
+  return callSportsGameOdds(
+    '/v2/events',
+    {
+      leagueID,
+      limit: 100,
+      ...cleanSharedParams(
+        params
+      )
+    }
+  );
+},
 
   async getEventOdds(
     sport,
