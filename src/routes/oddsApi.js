@@ -67,69 +67,63 @@ function compactEvent(event, providerName) {
     return null;
   }
 
-  const teams =
-    event.teams &&
-    typeof event.teams === 'object'
-      ? event.teams
-      : {};
-
-  const homeTeam =
-    firstValue(
-      event.home_team,
-      event.homeTeam,
-      event.home,
-      teams.home,
-      event.homeTeamName
-    );
-
-  const awayTeam =
-    firstValue(
-      event.away_team,
-      event.awayTeam,
-      event.away,
-      teams.away,
-      event.awayTeamName
-    );
-
-  const commenceTime =
-    firstValue(
-      event.commence_time,
-      event.commenceTime,
-      event.start_time,
-      event.startTime,
-      event.startsAt,
-      event.starts_at,
-      event.scheduled,
-      event.scheduledAt,
-      event.eventTime,
-      event.date
-    );
-
-  const status =
-    firstValue(
-      event.status,
-      event.eventStatus,
-      event.gameStatus,
-      event.state,
-      event.statusText,
-      event.phase
-    );
-
   const providerEventId =
-    firstValue(
-      event.provider_event_id,
-      event.eventID,
-      event.eventId,
-      event.id
-    );
+    event.provider_event_id ||
+    event.eventID ||
+    event.eventId ||
+    event.id ||
+    null;
 
   const gatewayEventId =
-    firstValue(
-      event.gateway_event_id,
+    event.gateway_event_id ||
+    (
       providerEventId
         ? `${providerName}:${providerEventId}`
         : null
     );
+
+  const homeTeam =
+    event?.teams?.home?.names?.long ||
+    event?.teams?.home?.names?.medium ||
+    event?.teams?.home?.names?.short ||
+    event?.home_team ||
+    event?.homeTeam ||
+    null;
+
+  const awayTeam =
+    event?.teams?.away?.names?.long ||
+    event?.teams?.away?.names?.medium ||
+    event?.teams?.away?.names?.short ||
+    event?.away_team ||
+    event?.awayTeam ||
+    null;
+
+  const commenceTime =
+    event?.status?.startsAt ||
+    event?.commence_time ||
+    event?.commenceTime ||
+    event?.start_time ||
+    event?.startTime ||
+    null;
+
+  let status =
+    event?.status?.displayLong ||
+    event?.status?.displayShort ||
+    null;
+
+  if (!status && event?.status) {
+    if (event.status.live) {
+      status = 'Live';
+    } else if (event.status.completed || event.status.ended) {
+      status = 'Final';
+    } else if (event.status.cancelled) {
+      status = 'Cancelled';
+    } else if (event.status.delayed) {
+      status = 'Delayed';
+    } else if (!event.status.started) {
+      status = 'Upcoming';
+    }
+  }
 
   return {
     gateway_event_id:
@@ -144,23 +138,16 @@ function compactEvent(event, providerName) {
       providerName,
 
     home_team:
-      teamName(homeTeam),
+      homeTeam,
 
     away_team:
-      teamName(awayTeam),
+      awayTeam,
 
     commence_time:
       commenceTime,
 
     status:
-      typeof status === 'object'
-        ? firstValue(
-            status.display,
-            status.name,
-            status.code,
-            status.state
-          )
-        : status
+      status
   };
 }
 
