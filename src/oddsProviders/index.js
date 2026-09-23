@@ -22,16 +22,26 @@ function isConfigured(name) {
   return providerConfig.enabled && Boolean(providerConfig.apiKey);
 }
 
-export function getOddsProvider(name = 'theOddsApi') {
-  const provider = providers[name];
+export function getOddsProvider(name) {
+  if (name) {
+    const provider = providers[name];
 
-  if (!provider) {
-    throw new HttpError(500, `Unknown odds provider "${name}"`);
+    if (!provider) {
+      throw new HttpError(500, `Unknown odds provider "${name}"`);
+    }
+
+    if (!isConfigured(name)) {
+      throw new HttpError(503, `Odds provider "${name}" is not configured`);
+    }
+
+    return provider;
   }
 
-  if (!isConfigured(name)) {
-    throw new HttpError(503, `Odds provider "${name}" is not configured`);
+  for (const providerName of config.oddsProviderOrder) {
+    if (isConfigured(providerName) && providers[providerName]) {
+      return providers[providerName];
+    }
   }
 
-  return provider;
+  throw new HttpError(503, 'No odds providers are configured');
 }
