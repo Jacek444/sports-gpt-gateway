@@ -1,18 +1,14 @@
-import { getOddsProvider } from '../oddsProviders/index.js';
 import express from 'express';
-
+import {
+  getOddsProvider,
+  withOddsProviderFallback
+} from '../oddsProviders/index.js';
 
 const router = express.Router();
 
-function requireOddsApiKey() {
-  if (!config.oddsApi.apiKey) {
-    throw new HttpError(500, 'ODDS_API_KEY is not configured on the server');
-  }
-}
-
 router.get('/sports', async (req, res, next) => {
   try {
-  const provider = getOddsProvider();
+    const provider = getOddsProvider();
 
     const result = await provider.getSports({
       all: req.query.all
@@ -26,22 +22,22 @@ router.get('/sports', async (req, res, next) => {
 
 router.get('/:sport/odds', async (req, res, next) => {
   try {
-    const provider = getOddsProvider();
-
-    const result = await provider.getOddsBoard(req.params.sport, {
-      regions: req.query.regions || 'us',
-      markets: req.query.markets || 'h2h,spreads,totals',
-      oddsFormat: req.query.oddsFormat || 'american',
-      dateFormat: req.query.dateFormat || 'iso',
-      bookmakers: req.query.bookmakers,
-      commenceTimeFrom: req.query.commenceTimeFrom,
-      commenceTimeTo: req.query.commenceTimeTo,
-      includeLinks: req.query.includeLinks,
-      includeSids: req.query.includeSids,
-      includeBetLimits: req.query.includeBetLimits,
-      includeRotationNumbers: req.query.includeRotationNumbers,
-      eventIds: req.query.eventIds
-    });
+    const result = await withOddsProviderFallback((provider) =>
+      provider.getOddsBoard(req.params.sport, {
+        regions: req.query.regions || 'us',
+        markets: req.query.markets || 'h2h,spreads,totals',
+        oddsFormat: req.query.oddsFormat || 'american',
+        dateFormat: req.query.dateFormat || 'iso',
+        bookmakers: req.query.bookmakers,
+        commenceTimeFrom: req.query.commenceTimeFrom,
+        commenceTimeTo: req.query.commenceTimeTo,
+        includeLinks: req.query.includeLinks,
+        includeSids: req.query.includeSids,
+        includeBetLimits: req.query.includeBetLimits,
+        includeRotationNumbers: req.query.includeRotationNumbers,
+        eventIds: req.query.eventIds
+      })
+    );
 
     res.json(result);
   } catch (error) {
