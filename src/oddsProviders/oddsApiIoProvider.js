@@ -9,10 +9,21 @@ function requireApiKey() {
   }
 
   if (!providerConfig.apiKey) {
-    throw new HttpError(500, 'ODDS_API_IO_KEY is not configured on the server');
+    throw new HttpError(
+      500,
+      'ODDS_API_IO_KEY is not configured on the server'
+    );
   }
 
   return providerConfig;
+}
+
+function addParams(url, params = {}) {
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') {
+      url.searchParams.set(key, String(value));
+    }
+  }
 }
 
 async function call(pathname, params = {}, requireKey = true) {
@@ -24,23 +35,47 @@ async function call(pathname, params = {}, requireKey = true) {
 
   const url = new URL(pathname, providerConfig.baseUrl);
 
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null && value !== '') {
-      url.searchParams.set(key, String(value));
-    }
-  }
+  addParams(url, params);
 
   if (requireKey) {
     url.searchParams.set('apiKey', providerConfig.apiKey);
   }
 
-  const response = await fetch(url, {
-    headers: {
-      Accept: 'application/json'
-    }
-  });
+  const controller = new AbortController();
+
+  const timeout = setTimeout(
+    () => controller.abort(),
+    config.oddsRequestTimeoutMs
+  );
+
+  let response;
+
+  try {
+    response = await fetch(url, {
+      headers: {
+        Accept: 'application/json'
+      },
+      signal: controller.signal
+    });
+  } catch (error) {
+    clearTimeout(timeout);
+
+    throw new HttpError(
+      502,
+      'Odds-API.io request failed',
+      {
+        provider: 'oddsApiIo',
+        status: 0,
+        upstreamStatus: 0,
+        body: error?.message || String(error)
+      }
+    );
+  }
+
+  clearTimeout(timeout);
 
   const text = await response.text();
+
   let body;
 
   try {
@@ -50,12 +85,18 @@ async function call(pathname, params = {}, requireKey = true) {
   }
 
   if (!response.ok) {
-    throw new HttpError(502, 'Odds-API.io request failed', {
-      provider: 'oddsApiIo',
-      status: response.status,
-      statusText: response.statusText,
-      body
-    });
+    throw new HttpError(
+      502,
+      'Odds-API.io request failed',
+      {
+        provider: 'oddsApiIo',
+        status: response.status,
+        upstreamStatus: response.status,
+        statusText: response.statusText,
+        retryAfter: response.headers.get('retry-after'),
+        body
+      }
+    );
   }
 
   return {
@@ -84,7 +125,7 @@ export const oddsApiIoProvider = {
     });
   },
 
-  getEventOdds(eventId, params = {}) {
+  getEventOdds(sport, eventId, params = {}) {
     return call('/v3/odds', {
       eventId,
       ...params
