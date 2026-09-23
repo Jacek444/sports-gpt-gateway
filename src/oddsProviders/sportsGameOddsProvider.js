@@ -10,21 +10,17 @@ const LEAGUE_MAP = {
   americanfootball_ncaaf: 'NCAAF'
 };
 
-function toLeagueID(sport) {
-  return LEAGUE_MAP[sport] || sport;
-}
+function requireConfig() {
+  const providerConfig =
+    config.oddsProviders.sportsGameOdds;
 
-function requireApiKey() {
-  const providerConfig = config.oddsProviders.sportsGameOdds;
-
-  if (!providerConfig.enabled) {
-    throw new HttpError(503, 'SportsGameOdds provider is disabled');
-  }
-
-  if (!providerConfig.apiKey) {
+  if (
+    !providerConfig?.enabled ||
+    !providerConfig?.apiKey
+  ) {
     throw new HttpError(
-      500,
-      'SPORTSGAMEODDS_API_KEY is not configured on the server'
+      503,
+      'SportsGameOdds is not configured'
     );
   }
 
@@ -33,147 +29,294 @@ function requireApiKey() {
 
 function addParams(url, params = {}) {
   for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null && value !== '') {
-      url.searchParams.set(key, String(value));
+    if (
+      value === undefined ||
+      value === null ||
+      value === ''
+    ) {
+      continue;
     }
+
+    url.searchParams.set(
+      key,
+      String(value)
+    );
   }
+
+  return url;
 }
 
 function cleanSharedParams(params = {}) {
-  const {
-    regions,
-    oddsFormat,
-    dateFormat,
-    includeLinks,
-    includeSids,
-    includeBetLimits,
-    includeRotationNumbers,
-    includeMultipliers,
-    eventIds,
-    daysFrom,
-    ...rest
-  } = params;
+  const cleaned = {
+    ...params
+  };
 
-  return rest;
+  /*
+    SharpBet uses The Odds API style names internally.
+
+    SportsGameOdds uses:
+      commenceTimeFrom -> startsAfter
+      commenceTimeTo   -> startsBefore
+  */
+  if (params.commenceTimeFrom) {
+    cleaned.startsAfter =
+      params.commenceTimeFrom;
+  }
+
+  if (params.commenceTimeTo) {
+    cleaned.startsBefore =
+      params.commenceTimeTo;
+  }
+
+  /*
+    Remove the original names so SportsGameOdds does not
+    receive unsupported query parameters.
+  */
+  delete cleaned.commenceTimeFrom;
+  delete cleaned.commenceTimeTo;
+
+  /*
+    These parameters belong to other provider APIs and
+    should not be forwarded directly to SportsGameOdds.
+  */
+  delete cleaned.regions;
+  delete cleaned.oddsFormat;
+  delete cleaned.dateFormat;
+  delete cleaned.includeLinks;
+  delete cleaned.includeSids;
+  delete cleaned.includeBetLimits;
+  delete cleaned.includeRotationNumbers;
+  delete cleaned.includeMultipliers;
+  delete cleaned.eventIds;
+  delete cleaned.daysFrom;
+
+  return cleaned;
 }
 
-async function call(pathname, params = {}) {
-  const providerConfig = requireApiKey();
+async function callSportsGameOdds(
+  path,
+  params = {}
+) {
+  const providerConfig =
+    requireConfig();
 
-  const url = new URL(pathname, providerConfig.baseUrl);
-
-  addParams(url, params);
-
-  const controller = new AbortController();
-
-  const timeout = setTimeout(
-    () => controller.abort(),
-    config.oddsRequestTimeoutMs
+  const url = new URL(
+    path,
+    providerConfig.baseUrl
   );
+
+  addParams(
+    url,
+    params
+  );
+
+  const controller =
+    new AbortController();
+
+  const timeout =
+    setTimeout(
+      () => controller.abort(),
+      config.oddsRequestTimeoutMs
+    );
 
   let response;
 
   try {
-    response = await fetch(url, {
-      headers: {
-        Accept: 'application/json',
-        'x-api-key': providerConfig.apiKey
-      },
-      signal: controller.signal
-    });
+    response = await fetch(
+      url,
+      {
+        headers: {
+          'x-api-key':
+            providerConfig.apiKey,
+          accept:
+            'application/json'
+        },
+
+        signal:
+          controller.signal
+      }
+    );
   } catch (error) {
-    clearTimeout(timeout);
+    if (
+      error?.name ===
+      'AbortError'
+    ) {
+      throw new HttpError(
+        504,
+        'SportsGameOdds request timed out',
+        {
+          provider:
+            'sportsGameOdds'
+        }
+      );
+    }
 
     throw new HttpError(
       502,
       'SportsGameOdds request failed',
       {
-        provider: 'sportsGameOdds',
-        status: 0,
-        upstreamStatus: 0,
-        body: error?.message || String(error)
+        provider:
+          'sportsGameOdds',
+        cause:
+          error?.message ||
+          String(error)
       }
     );
+  } finally {
+    clearTimeout(timeout);
   }
 
-  clearTimeout(timeout);
-
-  const text = await response.text();
-
-  let body;
+  let body = null;
 
   try {
-    body = text ? JSON.parse(text) : null;
+    body =
+      await response.json();
   } catch {
-    body = text;
+    body = null;
   }
 
   if (!response.ok) {
     throw new HttpError(
       502,
-      'SportsGameOdds request failed',
+      'SportsGameOdds upstream request failed',
       {
-        provider: 'sportsGameOdds',
-        status: response.status,
-        upstreamStatus: response.status,
-        statusText: response.statusText,
-        retryAfter: response.headers.get('retry-after'),
+        provider:
+          'sportsGameOdds',
+
+        status:
+          response.status,
+
+        upstreamStatus:
+          response.status,
+
+        retryAfter:
+          response.headers.get(
+            'retry-after'
+          ),
+
         body
       }
     );
   }
 
   return {
-    provider: 'sportsGameOdds',
-    data: body?.data ?? body,
+    provider:
+      'sportsGameOdds',
+
+    data:
+      body?.data ??
+      body ??
+      [],
+
     nextCursor:
       body?.nextCursor ??
-      body?.next_cursor ??
       null,
-    quota: null
+
+    quota:
+      null
   };
 }
 
+function leagueForSport(sport) {
+  const league =
+    LEAGUE_MAP[sport];
+
+  if (!league) {
+    throw new HttpError(
+      400,
+      `SportsGameOdds does not have a league mapping for "${sport}"`
+    );
+  }
+
+  return league;
+}
+
 export const sportsGameOddsProvider = {
-  getSports(params = {}) {
-    return call('/v2/sports', cleanSharedParams(params));
+  name:
+    'sportsGameOdds',
+
+  async getSports(params = {}) {
+    return callSportsGameOdds(
+      '/v2/sports',
+      cleanSharedParams(params)
+    );
   },
 
-  getOddsBoard(sport, params = {}) {
-    const cleaned = cleanSharedParams(params);
+  async getOddsBoard(
+    sport,
+    params = {}
+  ) {
+    const leagueID =
+      leagueForSport(sport);
 
-    return call('/v2/events', {
-      leagueID: toLeagueID(sport),
-      oddsAvailable: true,
-      ...cleaned
-    });
+    return callSportsGameOdds(
+      '/v2/events',
+      {
+        leagueID,
+        oddsAvailable: true,
+        ...cleanSharedParams(
+          params
+        )
+      }
+    );
   },
 
-  getScores(sport, params = {}) {
-    const cleaned = cleanSharedParams(params);
+  async getScores(
+    sport,
+    params = {}
+  ) {
+    const leagueID =
+      leagueForSport(sport);
 
-    return call('/v2/events', {
-      leagueID: toLeagueID(sport),
-      ...cleaned
-    });
+    return callSportsGameOdds(
+      '/v2/events',
+      {
+        leagueID,
+        ...cleanSharedParams(
+          params
+        )
+      }
+    );
   },
 
-  getEvents(sport, params = {}) {
-    const cleaned = cleanSharedParams(params);
+  async getEvents(
+    sport,
+    params = {}
+  ) {
+    const leagueID =
+      leagueForSport(sport);
 
-    return call('/v2/events', {
-      leagueID: toLeagueID(sport),
-      ...cleaned
-    });
+    return callSportsGameOdds(
+      '/v2/events',
+      {
+        leagueID,
+        ...cleanSharedParams(
+          params
+        )
+      }
+    );
   },
 
-  getEventOdds(sport, eventId, params = {}) {
-    const cleaned = cleanSharedParams(params);
+  async getEventOdds(
+    sport,
+    eventId,
+    params = {}
+  ) {
+    const leagueID =
+      leagueForSport(sport);
 
-    return call('/v2/events', {
-      eventID: eventId,
-      oddsAvailable: true,
-      ...cleaned
-    });
+    return callSportsGameOdds(
+      '/v2/events',
+      {
+        leagueID,
+        eventID:
+          eventId,
+        oddsAvailable:
+          true,
+        ...cleanSharedParams(
+          params
+        )
+      }
+    );
   }
 };
