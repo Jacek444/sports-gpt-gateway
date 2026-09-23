@@ -1,5 +1,6 @@
 import express from 'express';
 import { config } from '../config.js';
+import { getOddsProviderUsageSummary } from '../storage.js';
 
 import {
   getOddsProvider,
@@ -22,60 +23,87 @@ function copyQueryWithoutProvider(query) {
   return params;
 }
 
-oddsApiRouter.get('/status', (req, res) => {
-  res.json(getOddsProviderStatus());
-});
-
-oddsApiRouter.get('/sports', async (req, res, next) => {
+oddsApiRouter.get('/status', async (req, res, next) => {
   try {
-    const providerName =
-      req.query.provider || null;
+    const runtime = getOddsProviderStatus();
 
-    const params =
-      copyQueryWithoutProvider(req.query);
+    const history =
+      await getOddsProviderUsageSummary();
 
-    if (providerName) {
-      const result =
-        await withSpecificOddsProvider(
-          providerName,
-          (provider) =>
-            provider.getSports(params),
-          {
-            cacheKey:
-              `sports:${providerName}:${JSON.stringify(params)}`,
-            cacheTtlMs:
-              10 * 60 * 1000,
-            requestType: 'sports'
-          }
-        );
-
-      return res.json(result);
-    }
-
-    const result =
-      await withOddsProviderFallback(
-        (provider) =>
-          provider.getSports(params),
-        {
-          order:
-            config.oddsSportsProviderOrder,
-
-          cacheKey:
-            `sports:auto:${JSON.stringify(params)}`,
-
-          cacheTtlMs:
-            10 * 60 * 1000,
-
-          requestType:
-            'sports'
-        }
-      );
-
-    res.json(result);
+    res.json({
+      runtime,
+      history
+    });
   } catch (error) {
     next(error);
   }
 });
+
+oddsApiRouter.get(
+  '/sports',
+  async (req, res, next) => {
+    try {
+      const providerName =
+        req.query.provider || null;
+
+      const params =
+        copyQueryWithoutProvider(
+          req.query
+        );
+
+      if (providerName) {
+        const result =
+          await withSpecificOddsProvider(
+            providerName,
+
+            (provider) =>
+              provider.getSports(
+                params
+              ),
+
+            {
+              cacheKey:
+                `sports:${providerName}:${JSON.stringify(params)}`,
+
+              cacheTtlMs:
+                10 * 60 * 1000,
+
+              requestType:
+                'sports'
+            }
+          );
+
+        return res.json(result);
+      }
+
+      const result =
+        await withOddsProviderFallback(
+          (provider) =>
+            provider.getSports(
+              params
+            ),
+
+          {
+            order:
+              config.oddsSportsProviderOrder,
+
+            cacheKey:
+              `sports:auto:${JSON.stringify(params)}`,
+
+            cacheTtlMs:
+              10 * 60 * 1000,
+
+            requestType:
+              'sports'
+          }
+        );
+
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 oddsApiRouter.get(
   '/:sport/odds',
@@ -364,10 +392,11 @@ oddsApiRouter.get(
       /*
         Event IDs are provider-specific.
 
-        If we do not know which provider created this ID,
+        If we do not know which provider created the ID,
         use the current primary provider only instead of
-        sending the same event ID across multiple providers.
+        sending the same event ID across several providers.
       */
+
       const provider =
         getOddsProvider();
 
