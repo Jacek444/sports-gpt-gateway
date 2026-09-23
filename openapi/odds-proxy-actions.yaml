@@ -1,62 +1,98 @@
-openapi: 3.1.0
+openapi: 3.0.3
 
 info:
-  title: Sports GPT Odds Proxy
-  version: 1.1.0
+  title: SharpBet Odds Proxy
+  version: 2.0.0
   description: >
-    Sports GPT gateway for The Odds API plus persistent bet-log and
-    postmortem storage actions.
+    SharpBet odds gateway for SportsGameOdds, ParlayAPI, The Odds API,
+    provider fallback, scores, events, event odds, provider status/history,
+    betting logs, and postmortems.
 
 servers:
   - url: https://sports-gpt-gateway.onrender.com
-    description: Deployed Render backend URL
+    description: SharpBet Sports GPT Gateway
+
+tags:
+  - name: Odds
+  - name: Logs
+  - name: System
 
 paths:
+
   /health:
     get:
       operationId: healthCheck
-      summary: Health check
+      tags:
+        - System
+      summary: Check gateway health
       responses:
-        "200":
-          description: Service status
+        '200':
+          description: Gateway health
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/odds/status:
+    get:
+      operationId: getOddsProviderStatus
+      tags:
+        - Odds
+      summary: Get runtime and persistent odds-provider status
+      description: >
+        Returns current runtime provider state and persistent Supabase usage
+        history, including requests, successes, failures, fallbacks, cache hits,
+        quota information, last success, and last error.
+      responses:
+        '200':
+          description: Provider status and history
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  ok:
-                    type: boolean
-                  odds_api_configured:
-                    type: boolean
+                  runtime:
+                    type: object
+                    additionalProperties: true
+                  history:
+                    type: object
+                    additionalProperties: true
+                additionalProperties: true
 
   /v1/odds/sports:
     get:
       operationId: listOddsSports
-      summary: List in-season sports from The Odds API
+      tags:
+        - Odds
+      summary: List sports supported by the odds gateway
+      description: >
+        Uses the gateway's configured sports-provider order.
       parameters:
-        - in: query
-          name: all
-          required: false
-          schema:
-            type: boolean
+        - $ref: '#/components/parameters/OddsProvider'
+
       responses:
-        "200":
+        '200':
           description: Sports list
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ProxyResponse"
+                $ref: '#/components/schemas/FlexibleOddsResponse'
 
   /v1/odds/{sport}/odds:
     get:
       operationId: getOddsBoard
+      tags:
+        - Odds
       summary: Get odds board for a sport
+      description: >
+        Uses the SharpBet gateway fallback chain. By default, the backend
+        attempts SportsGameOdds first, then ParlayAPI, then The Odds API
+        when available.
       parameters:
-        - in: path
-          name: sport
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/SportPath'
+
+        - $ref: '#/components/parameters/OddsProvider'
 
         - in: query
           name: regions
@@ -103,14 +139,12 @@ paths:
           required: false
           schema:
             type: string
-            format: date-time
 
         - in: query
           name: commenceTimeTo
           required: false
           schema:
             type: string
-            format: date-time
 
         - in: query
           name: eventIds
@@ -119,23 +153,26 @@ paths:
             type: string
 
       responses:
-        "200":
+        '200':
           description: Odds board
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ProxyResponse"
+                $ref: '#/components/schemas/FlexibleOddsResponse'
+
+        '502':
+          $ref: '#/components/responses/UpstreamFailure'
 
   /v1/odds/{sport}/scores:
     get:
       operationId: getOddsScores
-      summary: Get live, upcoming, and recent scores for a sport
+      tags:
+        - Odds
+      summary: Get live, upcoming, and recent scores
       parameters:
-        - in: path
-          name: sport
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/SportPath'
+
+        - $ref: '#/components/parameters/OddsProvider'
 
         - in: query
           name: daysFrom
@@ -156,23 +193,28 @@ paths:
             default: iso
 
       responses:
-        "200":
+        '200':
           description: Scores
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ProxyResponse"
+                $ref: '#/components/schemas/FlexibleOddsResponse'
+
+        '502':
+          $ref: '#/components/responses/UpstreamFailure'
 
   /v1/odds/{sport}/events:
     get:
       operationId: getOddsEvents
+      tags:
+        - Odds
       summary: Get event list for a sport
+      description: >
+        Events may include gateway_event_id and provider_event_id fields.
       parameters:
-        - in: path
-          name: sport
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/SportPath'
+
+        - $ref: '#/components/parameters/OddsProvider'
 
         - in: query
           name: dateFormat
@@ -184,30 +226,48 @@ paths:
               - unix
             default: iso
 
+        - in: query
+          name: commenceTimeFrom
+          required: false
+          schema:
+            type: string
+
+        - in: query
+          name: commenceTimeTo
+          required: false
+          schema:
+            type: string
+
       responses:
-        "200":
+        '200':
           description: Events
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ProxyResponse"
+                $ref: '#/components/schemas/FlexibleOddsResponse'
+
+        '502':
+          $ref: '#/components/responses/UpstreamFailure'
 
   /v1/odds/{sport}/events/{eventId}/odds:
     get:
       operationId: getOddsForEvent
-      summary: Get odds for one event, including props or alternate markets
+      tags:
+        - Odds
+      summary: Get odds for one event
+      description: >
+        Retrieves event-specific odds, props, alternate markets, or other
+        provider-supported markets.
       parameters:
-        - in: path
-          name: sport
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/SportPath'
 
         - in: path
           name: eventId
           required: true
           schema:
             type: string
+
+        - $ref: '#/components/parameters/OddsProvider'
 
         - in: query
           name: regions
@@ -249,19 +309,24 @@ paths:
             type: string
 
       responses:
-        "200":
-          description: Single-event odds
+        '200':
+          description: Event-specific odds
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ProxyResponse"
+                $ref: '#/components/schemas/FlexibleOddsResponse'
+
+        '502':
+          $ref: '#/components/responses/UpstreamFailure'
 
   /v1/logs/bet-log:
     get:
       operationId: listBetLogEntries
-      summary: Get saved bet log entries
+      tags:
+        - Logs
+      summary: Get saved betting log entries
       responses:
-        "200":
+        '200':
           description: Bet log entries
           content:
             application/json:
@@ -271,47 +336,54 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: "#/components/schemas/BetLogEntry"
+                      $ref: '#/components/schemas/BetLogEntry'
 
     post:
       operationId: createBetLogEntry
-      summary: Save a bet log entry
+      tags:
+        - Logs
+      summary: Save a betting log entry
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/BetLogEntryInput"
+              $ref: '#/components/schemas/BetLogEntryInput'
+
       responses:
-        "201":
-          description: Saved bet log entry
+        '201':
+          description: Bet log entry created
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   data:
-                    $ref: "#/components/schemas/BetLogEntry"
+                    $ref: '#/components/schemas/BetLogEntry'
 
   /v1/logs/bet-log/{id}:
     patch:
       operationId: updateBetLogEntry
-      summary: Update a saved bet log entry by ID
+      tags:
+        - Logs
+      summary: Update a saved betting log entry
       parameters:
         - in: path
           name: id
           required: true
           schema:
             type: string
+
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/BetLogEntryUpdateInput"
+              $ref: '#/components/schemas/BetLogEntryUpdate'
+
       responses:
-        "200":
-          description: Bet log entry updated successfully
+        '200':
+          description: Bet log entry updated
           content:
             application/json:
               schema:
@@ -320,34 +392,26 @@ paths:
                   success:
                     type: boolean
                   data:
-                    $ref: "#/components/schemas/BetLogEntry"
+                    $ref: '#/components/schemas/BetLogEntry'
 
-        "400":
-          description: Invalid update request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-        "404":
-          description: Bet log entry not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
+        '404':
+          $ref: '#/components/responses/NotFound'
 
     delete:
       operationId: deleteBetLogEntry
-      summary: Delete a saved bet log entry by ID
+      tags:
+        - Logs
+      summary: Delete a saved betting log entry
       parameters:
         - in: path
           name: id
           required: true
           schema:
             type: string
+
       responses:
-        "200":
-          description: Bet log entry deleted successfully
+        '200':
+          description: Bet log entry deleted
           content:
             application/json:
               schema:
@@ -358,20 +422,18 @@ paths:
                   deleted_id:
                     type: string
 
-        "404":
-          description: Bet log entry not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /v1/logs/postmortems:
     get:
       operationId: listPostmortems
-      summary: Get saved postmortem entries
+      tags:
+        - Logs
+      summary: Get saved betting postmortems
       responses:
-        "200":
-          description: Postmortem entries
+        '200':
+          description: Postmortems
           content:
             application/json:
               schema:
@@ -380,47 +442,54 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: "#/components/schemas/Postmortem"
+                      $ref: '#/components/schemas/Postmortem'
 
     post:
       operationId: createPostmortem
+      tags:
+        - Logs
       summary: Save a betting postmortem
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PostmortemInput"
+              $ref: '#/components/schemas/PostmortemInput'
+
       responses:
-        "201":
-          description: Saved postmortem
+        '201':
+          description: Postmortem created
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   data:
-                    $ref: "#/components/schemas/Postmortem"
+                    $ref: '#/components/schemas/Postmortem'
 
   /v1/logs/postmortems/{id}:
     patch:
       operationId: updatePostmortem
-      summary: Update a saved betting postmortem by ID
+      tags:
+        - Logs
+      summary: Update a saved betting postmortem
       parameters:
         - in: path
           name: id
           required: true
           schema:
             type: string
+
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PostmortemUpdateInput"
+              $ref: '#/components/schemas/PostmortemUpdate'
+
       responses:
-        "200":
-          description: Postmortem updated successfully
+        '200':
+          description: Postmortem updated
           content:
             application/json:
               schema:
@@ -429,34 +498,26 @@ paths:
                   success:
                     type: boolean
                   data:
-                    $ref: "#/components/schemas/Postmortem"
+                    $ref: '#/components/schemas/Postmortem'
 
-        "400":
-          description: Invalid update request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-        "404":
-          description: Postmortem not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
+        '404':
+          $ref: '#/components/responses/NotFound'
 
     delete:
       operationId: deletePostmortem
-      summary: Delete a saved betting postmortem by ID
+      tags:
+        - Logs
+      summary: Delete a saved betting postmortem
       parameters:
         - in: path
           name: id
           required: true
           schema:
             type: string
+
       responses:
-        "200":
-          description: Postmortem deleted successfully
+        '200':
+          description: Postmortem deleted
           content:
             application/json:
               schema:
@@ -467,52 +528,83 @@ paths:
                   deleted_id:
                     type: string
 
-        "404":
-          description: Postmortem not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
+        '404':
+          $ref: '#/components/responses/NotFound'
 
 components:
+
+  parameters:
+
+    SportPath:
+      in: path
+      name: sport
+      required: true
+      description: >
+        Example values: basketball_nba, americanfootball_nfl,
+        basketball_ncaab, americanfootball_ncaaf, baseball_mlb,
+        icehockey_nhl.
+      schema:
+        type: string
+
+    OddsProvider:
+      in: query
+      name: provider
+      required: false
+      description: >
+        Optional provider override. Leave blank to use the normal SharpBet
+        provider fallback chain.
+      schema:
+        type: string
+        enum:
+          - sportsGameOdds
+          - parlayApi
+          - theOddsApi
+          - oddsApiIo
+
+  responses:
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    UpstreamFailure:
+      description: Upstream sports or odds provider failure
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
   schemas:
-    ProxyResponse:
+
+    FlexibleOddsResponse:
       type: object
       properties:
+        provider:
+          type: string
+
         data:
-          description: Raw JSON returned by The Odds API
+          nullable: true
+
         quota:
           type: object
+          nullable: true
+          additionalProperties: true
+
+        cache:
+          type: object
           properties:
-            remaining:
-              type:
-                - string
-                - "null"
-            used:
-              type:
-                - string
-                - "null"
-            last:
-              type:
-                - string
-                - "null"
+            hit:
+              type: boolean
+          additionalProperties: true
+
+      additionalProperties: true
 
     ErrorResponse:
       type: object
-      properties:
-        error:
-          type:
-            - string
-            - object
-            - "null"
-        message:
-          type:
-            - string
-            - "null"
-        success:
-          type:
-            - boolean
-            - "null"
+      additionalProperties: true
 
     BetLogEntryInput:
       type: object
@@ -530,61 +622,46 @@ components:
         selection:
           type: string
         line:
-          type:
-            - string
-            - "null"
+          nullable: true
         odds:
           type: string
         sportsbook:
           type: string
         stake_usd:
-          type:
-            - number
-            - "null"
+          type: number
+          nullable: true
         units:
-          type:
-            - number
-            - "null"
+          type: number
+          nullable: true
         is_bonus_bet:
           type: boolean
         boost_used:
           type: boolean
         ev_percent:
-          type:
-            - number
-            - "null"
+          type: number
+          nullable: true
         fair_odds:
-          type:
-            - string
-            - "null"
+          nullable: true
         kelly_percent:
-          type:
-            - number
-            - "null"
+          type: number
+          nullable: true
         reason:
-          type:
-            - string
-            - "null"
+          type: string
+          nullable: true
         result:
-          type:
-            - string
-            - "null"
+          type: string
+          nullable: true
         payout_usd:
-          type:
-            - number
-            - "null"
+          type: number
+          nullable: true
         closing_line:
-          type:
-            - string
-            - "null"
+          nullable: true
         clv_notes:
-          type:
-            - string
-            - "null"
+          type: string
+          nullable: true
         postmortem:
-          type:
-            - string
-            - "null"
+          type: string
+          nullable: true
 
       required:
         - date
@@ -596,49 +673,38 @@ components:
         - odds
         - sportsbook
 
-    BetLogEntryUpdateInput:
+    BetLogEntryUpdate:
       type: object
       properties:
         closing_line:
-          type:
-            - string
-            - "null"
+          nullable: true
         clv_notes:
-          type:
-            - string
-            - "null"
+          type: string
+          nullable: true
         result:
-          type:
-            - string
-            - "null"
+          type: string
+          nullable: true
         payout_usd:
-          type:
-            - number
-            - "null"
+          type: number
+          nullable: true
         postmortem:
-          type:
-            - string
-            - "null"
+          type: string
+          nullable: true
         ev_percent:
-          type:
-            - number
-            - "null"
+          type: number
+          nullable: true
         fair_odds:
-          type:
-            - string
-            - "null"
+          nullable: true
         kelly_percent:
-          type:
-            - number
-            - "null"
+          type: number
+          nullable: true
         reason:
-          type:
-            - string
-            - "null"
+          type: string
+          nullable: true
 
     BetLogEntry:
       allOf:
-        - $ref: "#/components/schemas/BetLogEntryInput"
+        - $ref: '#/components/schemas/BetLogEntryInput'
         - type: object
           properties:
             id:
@@ -646,6 +712,7 @@ components:
             created_at:
               type: string
               format: date-time
+
           required:
             - id
             - created_at
@@ -678,7 +745,7 @@ components:
         - date
         - summary
 
-    PostmortemUpdateInput:
+    PostmortemUpdate:
       type: object
       properties:
         date:
@@ -704,7 +771,7 @@ components:
 
     Postmortem:
       allOf:
-        - $ref: "#/components/schemas/PostmortemInput"
+        - $ref: '#/components/schemas/PostmortemInput'
         - type: object
           properties:
             id:
@@ -712,6 +779,7 @@ components:
             created_at:
               type: string
               format: date-time
+
           required:
             - id
             - created_at
