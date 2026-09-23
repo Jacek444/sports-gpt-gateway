@@ -3,7 +3,6 @@ import { config } from './config.js';
 import { toErrorResponse } from './errors.js';
 import { LEAGUE_DEFINITIONS, assertLeagueCode } from './leagues.js';
 import { getProviderDefaults, getProviderForLeague } from './providers/index.js';
-import { getOddsProviderStatus } from './oddsProviders/index.js';
 import { logsRouter } from './routes/logs.js';
 import { oddsApiRouter } from './routes/oddsApi.js';
 
@@ -18,7 +17,7 @@ app.get('/health', (req, res) => {
   res.json({
     ok: true,
     provider_defaults: getProviderDefaults(),
-    odds: getOddsProviderStatus()
+    odds_api_configured: Boolean(config.oddsApi.apiKey)
   });
 });
 
@@ -95,11 +94,9 @@ app.get('/v1/standings', async (req, res, next) => {
 
 app.use((error, req, res, next) => {
   const status = error.status || 500;
-
   if (status >= 500) {
     console.error(error);
   }
-
   res.status(status).json(toErrorResponse(error));
 });
 
