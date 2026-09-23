@@ -8,7 +8,7 @@ const router = express.Router();
 
 router.get('/sports', async (req, res, next) => {
   try {
-    const provider = getOddsProvider();
+  const provider = getOddsProvider(req.query.provider);
 
     const result = await provider.getSports({
       all: req.query.all
