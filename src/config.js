@@ -43,7 +43,14 @@ export const config = {
     baseUrl: env('PARLAY_API_BASE_URL', 'https://parlay-api.com')
   }
 },
-
+oddsProviderOrder: env(
+  'ODDS_PROVIDER_ORDER',
+  'sportsGameOdds,parlayApi,theOddsApi'
+)
+  .split(',')
+  .map((name) => name.trim())
+  .filter(Boolean),
+  
   ballDontLie: {
     apiKey: env('BALLDONTLIE_API_KEY'),
     baseUrl: env('BALLDONTLIE_BASE_URL', 'https://api.balldontlie.io')
