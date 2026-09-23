@@ -1,5 +1,7 @@
 import { config } from '../config.js';
 import { HttpError } from '../errors.js';
+import { addOddsProviderUsage } from '../storage.js';
+
 import { theOddsApiProvider } from './theOddsApiProvider.js';
 import { oddsApiIoProvider } from './oddsApiIoProvider.js';
 import { sportsGameOddsProvider } from './sportsGameOddsProvider.js';
@@ -48,7 +50,49 @@ function isTemporarilyUnavailable(name) {
   const state = getState(name);
   const now = Date.now();
 
-  return state.disabledUntil > now || state.exhaustedUntil > now;
+  return (
+    state.disabledUntil > now ||
+    state.exhaustedUntil > now
+  );
+}
+
+async function safeLogUsage({
+  provider,
+  requestType,
+  success,
+  fallbackUsed = false,
+  cacheHit = false,
+  upstreamStatus = null,
+  quota = null,
+  errorMessage = null
+}) {
+  if (!provider || !requestType) {
+    return;
+  }
+
+  try {
+    await addOddsProviderUsage({
+      provider,
+      request_type: requestType,
+      success,
+      fallback_used: fallbackUsed,
+      cache_hit: cacheHit,
+      upstream_status: upstreamStatus,
+      quota,
+      error_message: errorMessage
+    });
+  } catch (error) {
+    /*
+      Usage logging should never break a live odds request.
+
+      If Supabase logging fails, the provider response should still
+      be returned normally.
+    */
+    console.error(
+      'Failed to persist odds provider usage:',
+      error
+    );
+  }
 }
 
 function rememberQuota(name, result) {
@@ -77,15 +121,25 @@ function rememberFailure(name, error) {
 
   state.lastError = {
     at: new Date().toISOString(),
-    message: error?.message || String(error),
+    message:
+      error?.message ||
+      String(error),
     upstreamStatus
   };
 
   if (Number(upstreamStatus) === 429) {
-    const retrySeconds = Number(error?.details?.retryAfter || 60);
+    const retrySeconds = Number(
+      error?.details?.retryAfter || 60
+    );
 
     state.disabledUntil =
-      now + (Number.isFinite(retrySeconds) ? retrySeconds : 60) * 1000;
+      now +
+      (
+        Number.isFinite(retrySeconds)
+          ? retrySeconds
+          : 60
+      ) *
+        1000;
   }
 
   const body = error?.details?.body;
@@ -102,12 +156,18 @@ function rememberFailure(name, error) {
     typeof body === 'object' &&
     body.error === 'credit_limit_exceeded';
 
-  if (theOddsApiOutOfCredits || genericCreditLimitExceeded) {
-    const resetAt = Date.parse(body.next_reset_at || '');
+  if (
+    theOddsApiOutOfCredits ||
+    genericCreditLimitExceeded
+  ) {
+    const resetAt = Date.parse(
+      body.next_reset_at || ''
+    );
 
-    state.exhaustedUntil = Number.isFinite(resetAt)
-      ? resetAt
-      : now + 24 * 60 * 60 * 1000;
+    state.exhaustedUntil =
+      Number.isFinite(resetAt)
+        ? resetAt
+        : now + 24 * 60 * 60 * 1000;
   }
 }
 
@@ -125,9 +185,15 @@ function resultDataItems(result) {
   return [];
 }
 
-function rememberEventIds(result, providerName) {
+function rememberEventIds(
+  result,
+  providerName
+) {
   for (const item of resultDataItems(result)) {
-    if (!item || typeof item !== 'object') {
+    if (
+      !item ||
+      typeof item !== 'object'
+    ) {
       continue;
     }
 
@@ -140,20 +206,30 @@ function rememberEventIds(result, providerName) {
       continue;
     }
 
-    const rawIdString = String(rawId);
+    const rawIdString =
+      String(rawId);
 
-    eventProviderMap.set(rawIdString, providerName);
+    eventProviderMap.set(
+      rawIdString,
+      providerName
+    );
 
-    const gatewayId = `${providerName}:${rawIdString}`;
+    const gatewayId =
+      `${providerName}:${rawIdString}`;
 
-    eventProviderMap.set(gatewayId, providerName);
+    eventProviderMap.set(
+      gatewayId,
+      providerName
+    );
 
     if (!item.gateway_event_id) {
-      item.gateway_event_id = gatewayId;
+      item.gateway_event_id =
+        gatewayId;
     }
 
     if (!item.provider_event_id) {
-      item.provider_event_id = rawIdString;
+      item.provider_event_id =
+        rawIdString;
     }
   }
 }
@@ -177,23 +253,44 @@ function readCache(cacheKey) {
   return entry.value;
 }
 
-function writeCache(cacheKey, value, ttlMs) {
-  if (!cacheKey || !ttlMs || ttlMs <= 0) {
+function writeCache(
+  cacheKey,
+  value,
+  ttlMs
+) {
+  if (
+    !cacheKey ||
+    !ttlMs ||
+    ttlMs <= 0
+  ) {
     return;
   }
 
   cache.set(cacheKey, {
     value,
-    expiresAt: Date.now() + ttlMs
+    expiresAt:
+      Date.now() + ttlMs
   });
+}
+
+function getUpstreamStatus(error) {
+  return (
+    error?.details?.upstreamStatus ??
+    error?.details?.status ??
+    error?.status ??
+    null
+  );
 }
 
 export function getOddsProvider(
   name,
-  { ignoreRuntimeState = false } = {}
+  {
+    ignoreRuntimeState = false
+  } = {}
 ) {
   if (name) {
-    const provider = providers[name];
+    const provider =
+      providers[name];
 
     if (!provider) {
       throw new HttpError(
@@ -222,13 +319,18 @@ export function getOddsProvider(
     return provider;
   }
 
-  for (const providerName of config.oddsProviderOrder) {
+  for (
+    const providerName
+    of config.oddsProviderOrder
+  ) {
     if (
       isConfigured(providerName) &&
       providers[providerName] &&
       (
         ignoreRuntimeState ||
-        !isTemporarilyUnavailable(providerName)
+        !isTemporarilyUnavailable(
+          providerName
+        )
       )
     ) {
       return providers[providerName];
@@ -241,34 +343,49 @@ export function getOddsProvider(
   );
 }
 
-export function getProviderNameForEventId(eventId) {
+export function getProviderNameForEventId(
+  eventId
+) {
   if (!eventId) {
     return null;
   }
 
   const text = String(eventId);
-  const colonIndex = text.indexOf(':');
+  const colonIndex =
+    text.indexOf(':');
 
   if (colonIndex > 0) {
-    const candidate = text.slice(0, colonIndex);
+    const candidate =
+      text.slice(0, colonIndex);
 
     if (providers[candidate]) {
       return candidate;
     }
   }
 
-  return eventProviderMap.get(text) || null;
+  return (
+    eventProviderMap.get(text) ||
+    null
+  );
 }
 
-export function unwrapGatewayEventId(eventId) {
-  const text = String(eventId || '');
-  const colonIndex = text.indexOf(':');
+export function unwrapGatewayEventId(
+  eventId
+) {
+  const text =
+    String(eventId || '');
+
+  const colonIndex =
+    text.indexOf(':');
 
   if (colonIndex > 0) {
-    const candidate = text.slice(0, colonIndex);
+    const candidate =
+      text.slice(0, colonIndex);
 
     if (providers[candidate]) {
-      return text.slice(colonIndex + 1);
+      return text.slice(
+        colonIndex + 1
+      );
     }
   }
 
@@ -278,15 +395,35 @@ export function unwrapGatewayEventId(eventId) {
 export async function withOddsProviderFallback(
   action,
   {
-    order = config.oddsProviderOrder,
+    order =
+      config.oddsProviderOrder,
+
     cacheKey = null,
+
     cacheTtlMs = 0,
-    rememberEvents = false
+
+    rememberEvents = false,
+
+    requestType = 'unknown'
   } = {}
 ) {
-  const cached = readCache(cacheKey);
+  const cached =
+    readCache(cacheKey);
 
   if (cached) {
+    await safeLogUsage({
+      provider:
+        cached.provider ||
+        'unknown',
+      requestType,
+      success: true,
+      fallbackUsed: false,
+      cacheHit: true,
+      quota:
+        cached.quota ||
+        null
+    });
+
     return {
       ...cached,
       cache: {
@@ -297,27 +434,54 @@ export async function withOddsProviderFallback(
 
   const errors = [];
 
+  /*
+    This becomes true if an earlier configured provider
+    could not be used or failed.
+
+    That lets us record when a later provider actually
+    handled the request as a fallback.
+  */
+  let fallbackNeeded = false;
+
   for (const providerName of order) {
     if (
       !isConfigured(providerName) ||
-      !providers[providerName] ||
-      isTemporarilyUnavailable(providerName)
+      !providers[providerName]
     ) {
       continue;
     }
 
-    const provider = providers[providerName];
-    const state = getState(providerName);
+    if (
+      isTemporarilyUnavailable(
+        providerName
+      )
+    ) {
+      fallbackNeeded = true;
+      continue;
+    }
+
+    const provider =
+      providers[providerName];
+
+    const state =
+      getState(providerName);
+
+    const attemptIsFallback =
+      fallbackNeeded;
 
     state.requests += 1;
 
     try {
-      const result = await action(
-        provider,
-        providerName
-      );
+      const result =
+        await action(
+          provider,
+          providerName
+        );
 
-      rememberQuota(providerName, result);
+      rememberQuota(
+        providerName,
+        result
+      );
 
       if (rememberEvents) {
         rememberEventIds(
@@ -326,15 +490,29 @@ export async function withOddsProviderFallback(
         );
       }
 
-      if (errors.length > 0) {
+      if (attemptIsFallback) {
         state.fallbacksTriggered += 1;
       }
 
+      await safeLogUsage({
+        provider: providerName,
+        requestType,
+        success: true,
+        fallbackUsed:
+          attemptIsFallback,
+        cacheHit: false,
+        quota:
+          result?.quota ||
+          null
+      });
+
       const output = {
         ...result,
+
         provider:
           result?.provider ||
           providerName,
+
         cache: {
           hit: false
         }
@@ -353,19 +531,37 @@ export async function withOddsProviderFallback(
         error
       );
 
-      errors.push({
+      await safeLogUsage({
         provider: providerName,
+        requestType,
+        success: false,
+        fallbackUsed:
+          attemptIsFallback,
+        cacheHit: false,
+        upstreamStatus:
+          getUpstreamStatus(error),
+        errorMessage:
+          error?.message ||
+          String(error)
+      });
+
+      errors.push({
+        provider:
+          providerName,
+
         message:
           error?.message ||
           String(error),
+
         status:
           error?.status ||
           null,
+
         upstreamStatus:
-          error?.details?.upstreamStatus ??
-          error?.details?.status ??
-          null
+          getUpstreamStatus(error)
       });
+
+      fallbackNeeded = true;
     }
   }
 
@@ -373,7 +569,8 @@ export async function withOddsProviderFallback(
     502,
     'All configured odds providers failed',
     {
-      providersTried: errors
+      providersTried:
+        errors
     }
   );
 }
@@ -383,13 +580,31 @@ export async function withSpecificOddsProvider(
   action,
   {
     cacheKey = null,
+
     cacheTtlMs = 0,
-    rememberEvents = false
+
+    rememberEvents = false,
+
+    requestType = 'unknown'
   } = {}
 ) {
-  const cached = readCache(cacheKey);
+  const cached =
+    readCache(cacheKey);
 
   if (cached) {
+    await safeLogUsage({
+      provider:
+        cached.provider ||
+        providerName,
+      requestType,
+      success: true,
+      fallbackUsed: false,
+      cacheHit: true,
+      quota:
+        cached.quota ||
+        null
+    });
+
     return {
       ...cached,
       cache: {
@@ -398,16 +613,20 @@ export async function withSpecificOddsProvider(
     };
   }
 
-  const provider = getOddsProvider(providerName);
-  const state = getState(providerName);
+  const provider =
+    getOddsProvider(providerName);
+
+  const state =
+    getState(providerName);
 
   state.requests += 1;
 
   try {
-    const result = await action(
-      provider,
-      providerName
-    );
+    const result =
+      await action(
+        provider,
+        providerName
+      );
 
     rememberQuota(
       providerName,
@@ -421,11 +640,25 @@ export async function withSpecificOddsProvider(
       );
     }
 
+    await safeLogUsage({
+      provider:
+        providerName,
+      requestType,
+      success: true,
+      fallbackUsed: false,
+      cacheHit: false,
+      quota:
+        result?.quota ||
+        null
+    });
+
     const output = {
       ...result,
+
       provider:
         result?.provider ||
         providerName,
+
       cache: {
         hit: false
       }
@@ -444,12 +677,27 @@ export async function withSpecificOddsProvider(
       error
     );
 
+    await safeLogUsage({
+      provider:
+        providerName,
+      requestType,
+      success: false,
+      fallbackUsed: false,
+      cacheHit: false,
+      upstreamStatus:
+        getUpstreamStatus(error),
+      errorMessage:
+        error?.message ||
+        String(error)
+    });
+
     throw error;
   }
 }
 
 export function getOddsProviderStatus() {
-  const names = Object.keys(providers);
+  const names =
+    Object.keys(providers);
 
   return {
     defaultOrder:
@@ -458,65 +706,68 @@ export function getOddsProviderStatus() {
     sportsOrder:
       config.oddsSportsProviderOrder,
 
-    providers: Object.fromEntries(
-      names.map((name) => {
-        const providerConfig =
-          config.oddsProviders[name];
+    providers:
+      Object.fromEntries(
+        names.map((name) => {
+          const providerConfig =
+            config.oddsProviders[name];
 
-        const state =
-          getState(name);
+          const state =
+            getState(name);
 
-        return [
-          name,
-          {
-            enabled:
-              Boolean(
-                providerConfig?.enabled
-              ),
+          return [
+            name,
+            {
+              enabled:
+                Boolean(
+                  providerConfig?.enabled
+                ),
 
-            configured:
-              isConfigured(name),
+              configured:
+                isConfigured(name),
 
-            temporarilyUnavailable:
-              isTemporarilyUnavailable(name),
+              temporarilyUnavailable:
+                isTemporarilyUnavailable(
+                  name
+                ),
 
-            disabledUntil:
-              state.disabledUntil
-                ? new Date(
-                    state.disabledUntil
-                  ).toISOString()
-                : null,
+              disabledUntil:
+                state.disabledUntil
+                  ? new Date(
+                      state.disabledUntil
+                    ).toISOString()
+                  : null,
 
-            exhaustedUntil:
-              state.exhaustedUntil
-                ? new Date(
-                    state.exhaustedUntil
-                  ).toISOString()
-                : null,
+              exhaustedUntil:
+                state.exhaustedUntil
+                  ? new Date(
+                      state.exhaustedUntil
+                    ).toISOString()
+                  : null,
 
-            lastSuccessAt:
-              state.lastSuccessAt,
+              lastSuccessAt:
+                state.lastSuccessAt,
 
-            lastError:
-              state.lastError,
+              lastError:
+                state.lastError,
 
-            lastQuota:
-              state.lastQuota,
+              lastQuota:
+                state.lastQuota,
 
-            requests:
-              state.requests,
+              requests:
+                state.requests,
 
-            successes:
-              state.successes,
+              successes:
+                state.successes,
 
-            failures:
-              state.failures,
+              failures:
+                state.failures,
 
-            fallbacksTriggered:
-              state.fallbacksTriggered
-          }
-        ];
-      })
-    )
+              fallbacksTriggered:
+                state.fallbacksTriggered
+            }
+          ];
+        })
+      )
   };
 }
