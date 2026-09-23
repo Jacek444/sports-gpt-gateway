@@ -84,13 +84,13 @@ export const sportsGameOddsProvider = {
   });
 },
 
-  getEventOdds(eventID, params = {}) {
-    return call('/v2/events', {
-      eventID,
-      oddsAvailable: true,
-      ...params
-    });
-  },
+ getEventOdds(sport, eventID, params = {}) {
+  return call('/v2/events', {
+    eventID,
+    oddsAvailable: true,
+    ...params
+  });
+},
   
 getScores(sport, params = {}) {
   return call('/v2/events', {
