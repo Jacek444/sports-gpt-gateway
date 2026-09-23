@@ -2,6 +2,7 @@ import express from 'express';
 import { config } from '../config.js';
 import {
   getOddsProvider,
+  getOddsProviderStatus,
   getProviderNameForEventId,
   unwrapGatewayEventId,
   withOddsProviderFallback,
@@ -9,6 +10,10 @@ import {
 } from '../oddsProviders/index.js';
 
 const router = express.Router();
+
+router.get('/status', (req, res) => {
+  res.json(getOddsProviderStatus());
+});
 
 router.get('/sports', async (req, res, next) => {
   try {
