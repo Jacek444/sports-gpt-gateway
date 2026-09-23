@@ -45,3 +45,32 @@ export function getOddsProvider(name) {
 
   throw new HttpError(503, 'No odds providers are configured');
 }
+export async function withOddsProviderFallback(action) {
+  const errors = [];
+
+  for (const providerName of config.oddsProviderOrder) {
+    if (!isConfigured(providerName)) {
+      continue;
+    }
+
+    const provider = providers[providerName];
+
+    if (!provider) {
+      continue;
+    }
+
+    try {
+      return await action(provider, providerName);
+    } catch (error) {
+      errors.push({
+        provider: providerName,
+        message: error.message,
+        status: error.status
+      });
+    }
+  }
+
+  throw new HttpError(502, 'All configured odds providers failed', {
+    providersTried: errors
+  });
+} 
