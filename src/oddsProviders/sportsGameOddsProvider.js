@@ -22,10 +22,39 @@ function requireApiKey() {
   }
 
   if (!providerConfig.apiKey) {
-    throw new HttpError(500, 'SPORTSGAMEODDS_API_KEY is not configured on the server');
+    throw new HttpError(
+      500,
+      'SPORTSGAMEODDS_API_KEY is not configured on the server'
+    );
   }
 
   return providerConfig;
+}
+
+function addParams(url, params = {}) {
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') {
+      url.searchParams.set(key, String(value));
+    }
+  }
+}
+
+function cleanSharedParams(params = {}) {
+  const {
+    regions,
+    oddsFormat,
+    dateFormat,
+    includeLinks,
+    includeSids,
+    includeBetLimits,
+    includeRotationNumbers,
+    includeMultipliers,
+    eventIds,
+    daysFrom,
+    ...rest
+  } = params;
+
+  return rest;
 }
 
 async function call(pathname, params = {}) {
@@ -33,20 +62,44 @@ async function call(pathname, params = {}) {
 
   const url = new URL(pathname, providerConfig.baseUrl);
 
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null && value !== '') {
-      url.searchParams.set(key, String(value));
-    }
+  addParams(url, params);
+
+  const controller = new AbortController();
+
+  const timeout = setTimeout(
+    () => controller.abort(),
+    config.oddsRequestTimeoutMs
+  );
+
+  let response;
+
+  try {
+    response = await fetch(url, {
+      headers: {
+        Accept: 'application/json',
+        'x-api-key': providerConfig.apiKey
+      },
+      signal: controller.signal
+    });
+  } catch (error) {
+    clearTimeout(timeout);
+
+    throw new HttpError(
+      502,
+      'SportsGameOdds request failed',
+      {
+        provider: 'sportsGameOdds',
+        status: 0,
+        upstreamStatus: 0,
+        body: error?.message || String(error)
+      }
+    );
   }
 
-  const response = await fetch(url, {
-    headers: {
-      Accept: 'application/json',
-      'x-api-key': providerConfig.apiKey
-    }
-  });
+  clearTimeout(timeout);
 
   const text = await response.text();
+
   let body;
 
   try {
@@ -56,54 +109,71 @@ async function call(pathname, params = {}) {
   }
 
   if (!response.ok) {
-    throw new HttpError(502, 'SportsGameOdds request failed', {
-      provider: 'sportsGameOdds',
-      status: response.status,
-      statusText: response.statusText,
-      body
-    });
+    throw new HttpError(
+      502,
+      'SportsGameOdds request failed',
+      {
+        provider: 'sportsGameOdds',
+        status: response.status,
+        upstreamStatus: response.status,
+        statusText: response.statusText,
+        retryAfter: response.headers.get('retry-after'),
+        body
+      }
+    );
   }
 
   return {
     provider: 'sportsGameOdds',
     data: body?.data ?? body,
-    nextCursor: body?.nextCursor ?? null,
+    nextCursor:
+      body?.nextCursor ??
+      body?.next_cursor ??
+      null,
     quota: null
   };
 }
 
 export const sportsGameOddsProvider = {
   getSports(params = {}) {
-    return call('/v2/sports', params);
+    return call('/v2/sports', cleanSharedParams(params));
   },
 
- getEvents(sport, params = {}) {
-  return call('/v2/events', {
-    leagueID: toLeagueID(sport),
-    ...params
-  });
-},
+  getOddsBoard(sport, params = {}) {
+    const cleaned = cleanSharedParams(params);
 
- getEventOdds(sport, eventID, params = {}) {
-  return call('/v2/events', {
-    eventID,
-    oddsAvailable: true,
-    ...params
-  });
-},
-  
-getScores(sport, params = {}) {
-  return call('/v2/events', {
-    leagueID: toLeagueID(sport),
-    ...params
-  });
-},
-  
-getOddsBoard(sport, params = {}) {
-  return call('/v2/events', {
-    leagueID: toLeagueID(sport),
-    oddsAvailable: true,
-    ...params
-  });
-}
+    return call('/v2/events', {
+      leagueID: toLeagueID(sport),
+      oddsAvailable: true,
+      ...cleaned
+    });
+  },
+
+  getScores(sport, params = {}) {
+    const cleaned = cleanSharedParams(params);
+
+    return call('/v2/events', {
+      leagueID: toLeagueID(sport),
+      ...cleaned
+    });
+  },
+
+  getEvents(sport, params = {}) {
+    const cleaned = cleanSharedParams(params);
+
+    return call('/v2/events', {
+      leagueID: toLeagueID(sport),
+      ...cleaned
+    });
+  },
+
+  getEventOdds(sport, eventId, params = {}) {
+    const cleaned = cleanSharedParams(params);
+
+    return call('/v2/events', {
+      eventID: eventId,
+      oddsAvailable: true,
+      ...cleaned
+    });
+  }
 };
