@@ -102,10 +102,4 @@ router.get('/:sport/events/:eventId/odds', async (req, res, next) => {
   }
 });
 
-    res.json(result);
-  } catch (error) {
-    next(error);
-  }
-});
-
 export const oddsApiRouter = router;
