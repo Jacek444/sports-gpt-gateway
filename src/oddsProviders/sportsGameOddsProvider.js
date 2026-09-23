@@ -51,13 +51,6 @@ function cleanSharedParams(params = {}) {
     ...params
   };
 
-  /*
-    SharpBet uses The Odds API style names internally.
-
-    SportsGameOdds uses:
-      commenceTimeFrom -> startsAfter
-      commenceTimeTo   -> startsBefore
-  */
   if (params.commenceTimeFrom) {
     cleaned.startsAfter =
       params.commenceTimeFrom;
@@ -68,17 +61,9 @@ function cleanSharedParams(params = {}) {
       params.commenceTimeTo;
   }
 
-  /*
-    Remove the original names so SportsGameOdds does not
-    receive unsupported query parameters.
-  */
   delete cleaned.commenceTimeFrom;
   delete cleaned.commenceTimeTo;
 
-  /*
-    These parameters belong to other provider APIs and
-    should not be forwarded directly to SportsGameOdds.
-  */
   delete cleaned.regions;
   delete cleaned.oddsFormat;
   delete cleaned.dateFormat;
@@ -90,7 +75,89 @@ function cleanSharedParams(params = {}) {
   delete cleaned.eventIds;
   delete cleaned.daysFrom;
 
+  /*
+    "markets" is a SharpBet/The Odds API style parameter.
+    SportsGameOdds uses oddID instead, so we translate it
+    separately before calling the upstream API.
+  */
+  delete cleaned.markets;
+
   return cleaned;
+}
+
+function translateBaseMarkets(markets) {
+  if (!markets) {
+    return null;
+  }
+
+  const requested =
+    String(markets)
+      .split(',')
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean);
+
+  const oddIds = [];
+
+  /*
+    We only need one side of each paired market because
+    includeOpposingOdds=true will fetch the opposite side.
+  */
+
+  if (
+    requested.includes('h2h') ||
+    requested.includes('moneyline') ||
+    requested.includes('ml')
+  ) {
+    oddIds.push(
+      'points-home-game-ml-home'
+    );
+  }
+
+  if (
+    requested.includes('spreads') ||
+    requested.includes('spread') ||
+    requested.includes('runline') ||
+    requested.includes('run_line') ||
+    requested.includes('puckline') ||
+    requested.includes('puck_line')
+  ) {
+    oddIds.push(
+      'points-home-game-sp-home'
+    );
+  }
+
+  if (
+    requested.includes('totals') ||
+    requested.includes('total') ||
+    requested.includes('overunder') ||
+    requested.includes('over_under')
+  ) {
+    oddIds.push(
+      'points-all-game-ou-over'
+    );
+  }
+
+  if (oddIds.length === 0) {
+    return null;
+  }
+
+  return oddIds.join(',');
+}
+
+function sportsGameOddsMarketParams(params = {}) {
+  const oddID =
+    translateBaseMarkets(
+      params.markets
+    );
+
+  if (!oddID) {
+    return {};
+  }
+
+  return {
+    oddID,
+    includeOpposingOdds: true
+  };
 }
 
 async function callSportsGameOdds(
@@ -254,6 +321,9 @@ export const sportsGameOddsProvider = {
       {
         leagueID,
         oddsAvailable: true,
+        ...sportsGameOddsMarketParams(
+          params
+        ),
         ...cleanSharedParams(
           params
         )
@@ -279,24 +349,24 @@ export const sportsGameOddsProvider = {
     );
   },
 
- async getEvents(
-  sport,
-  params = {}
-) {
-  const leagueID =
-    leagueForSport(sport);
+  async getEvents(
+    sport,
+    params = {}
+  ) {
+    const leagueID =
+      leagueForSport(sport);
 
-  return callSportsGameOdds(
-    '/v2/events',
-    {
-      leagueID,
-      limit: 100,
-      ...cleanSharedParams(
-        params
-      )
-    }
-  );
-},
+    return callSportsGameOdds(
+      '/v2/events',
+      {
+        leagueID,
+        limit: 100,
+        ...cleanSharedParams(
+          params
+        )
+      }
+    );
+  },
 
   async getEventOdds(
     sport,
@@ -314,6 +384,9 @@ export const sportsGameOddsProvider = {
           eventId,
         oddsAvailable:
           true,
+        ...sportsGameOddsMarketParams(
+          params
+        ),
         ...cleanSharedParams(
           params
         )
