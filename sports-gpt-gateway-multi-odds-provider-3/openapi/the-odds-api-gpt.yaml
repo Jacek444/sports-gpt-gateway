@@ -1,0 +1,396 @@
+openapi: 3.1.0
+info:
+  title: The Odds API for GPT
+  version: 1.0.0
+  description: >
+    Direct GPT Action wrapper for The Odds API. Covers sports list, odds,
+    scores, events, and single-event odds.
+servers:
+  - url: https://api.the-odds-api.com
+    description: The Odds API
+security:
+  - OddsApiKey: []
+components:
+  securitySchemes:
+    OddsApiKey:
+      type: apiKey
+      in: query
+      name: apiKey
+  schemas:
+    Sport:
+      type: object
+      properties:
+        key:
+          type: string
+        group:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        active:
+          type: boolean
+        has_outrights:
+          type: boolean
+    ScoreEvent:
+      type: object
+      properties:
+        id:
+          type: string
+        sport_key:
+          type: string
+        sport_title:
+          type: string
+        commence_time:
+          type: string
+          format: date-time
+        completed:
+          type: boolean
+        home_team:
+          type: string
+        away_team:
+          type: string
+        scores:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              score:
+                type: string
+        last_update:
+          type: string
+          nullable: true
+    Event:
+      type: object
+      properties:
+        id:
+          type: string
+        sport_key:
+          type: string
+        sport_title:
+          type: string
+        commence_time:
+          type: string
+          format: date-time
+        home_team:
+          type: string
+        away_team:
+          type: string
+    OddsResponse:
+      type: array
+      items:
+        type: object
+        properties:
+          id:
+            type: string
+          sport_key:
+            type: string
+          sport_title:
+            type: string
+          commence_time:
+            type: string
+            format: date-time
+          home_team:
+            type: string
+          away_team:
+            type: string
+          bookmakers:
+            type: array
+            items:
+              type: object
+              properties:
+                key:
+                  type: string
+                title:
+                  type: string
+                last_update:
+                  type: string
+                  format: date-time
+                markets:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      key:
+                        type: string
+                      outcomes:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            name:
+                              type: string
+                            description:
+                              type: string
+                              nullable: true
+                            price:
+                              type: number
+                            point:
+                              type: number
+                              nullable: true
+    EventOddsResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        sport_key:
+          type: string
+        sport_title:
+          type: string
+        commence_time:
+          type: string
+          format: date-time
+        home_team:
+          type: string
+        away_team:
+          type: string
+        bookmakers:
+          type: array
+          items:
+            type: object
+            properties:
+              key:
+                type: string
+              title:
+                type: string
+              markets:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    key:
+                      type: string
+                    last_update:
+                      type: string
+                      format: date-time
+                    outcomes:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                          description:
+                            type: string
+                            nullable: true
+                          price:
+                            type: number
+                          point:
+                            type: number
+                            nullable: true
+paths:
+  /v4/sports:
+    get:
+      operationId: listSports
+      summary: Get in-season sports
+      parameters:
+        - in: query
+          name: all
+          required: false
+          schema:
+            type: boolean
+          description: Set true to include out-of-season sports too
+      responses:
+        '200':
+          description: List of sports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Sport'
+  /v4/sports/{sport}/odds:
+    get:
+      operationId: getOdds
+      summary: Get upcoming or live odds for a sport
+      parameters:
+        - in: path
+          name: sport
+          required: true
+          schema:
+            type: string
+          description: >
+            Example keys: americanfootball_nfl, americanfootball_ncaaf,
+            basketball_nba, basketball_ncaab, baseball_mlb, icehockey_nhl
+        - in: query
+          name: regions
+          required: true
+          schema:
+            type: string
+            default: us
+          description: Usually use us
+        - in: query
+          name: markets
+          required: false
+          schema:
+            type: string
+            default: h2h,spreads,totals
+          description: >
+            Comma-separated. Common values: h2h, spreads, totals, outrights
+        - in: query
+          name: oddsFormat
+          required: false
+          schema:
+            type: string
+            enum: [american, decimal]
+            default: american
+        - in: query
+          name: dateFormat
+          required: false
+          schema:
+            type: string
+            enum: [iso, unix]
+            default: iso
+        - in: query
+          name: bookmakers
+          required: false
+          schema:
+            type: string
+          description: >
+            Comma-separated. Example: draftkings,fanduel,caesars,betmgm,bet365,betrivers
+        - in: query
+          name: commenceTimeFrom
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: commenceTimeTo
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: includeLinks
+          required: false
+          schema:
+            type: boolean
+        - in: query
+          name: includeSids
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Odds list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OddsResponse'
+  /v4/sports/{sport}/scores:
+    get:
+      operationId: getScores
+      summary: Get live, upcoming, and recent scores for a sport
+      parameters:
+        - in: path
+          name: sport
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: daysFrom
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 3
+          description: Include completed games from past 1 to 3 days
+        - in: query
+          name: dateFormat
+          required: false
+          schema:
+            type: string
+            enum: [iso, unix]
+            default: iso
+      responses:
+        '200':
+          description: Scores list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScoreEvent'
+  /v4/sports/{sport}/events:
+    get:
+      operationId: getEvents
+      summary: Get event list for a sport
+      parameters:
+        - in: path
+          name: sport
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: dateFormat
+          required: false
+          schema:
+            type: string
+            enum: [iso, unix]
+            default: iso
+      responses:
+        '200':
+          description: Events list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Event'
+  /v4/sports/{sport}/events/{eventId}/odds:
+    get:
+      operationId: getEventOdds
+      summary: Get odds for one event, including props or alternate markets
+      parameters:
+        - in: path
+          name: sport
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: eventId
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: regions
+          required: true
+          schema:
+            type: string
+            default: us
+        - in: query
+          name: markets
+          required: true
+          schema:
+            type: string
+          description: >
+            Example: h2h,spreads,totals or player_points,player_assists,alternate_spreads
+        - in: query
+          name: oddsFormat
+          required: false
+          schema:
+            type: string
+            enum: [american, decimal]
+            default: american
+        - in: query
+          name: dateFormat
+          required: false
+          schema:
+            type: string
+            enum: [iso, unix]
+            default: iso
+        - in: query
+          name: bookmakers
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Single-event odds
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventOddsResponse'
