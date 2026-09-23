@@ -106,3 +106,4 @@ getOddsBoard(sport, params = {}) {
     ...params
   });
 }
+};
