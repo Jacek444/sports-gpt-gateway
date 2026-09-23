@@ -339,3 +339,136 @@ export async function deletePostmortem(id) {
 
   return Array.isArray(data) && data.length > 0;
 }
+
+export async function addOddsProviderUsage(input) {
+  const entry = {
+    provider: normalizeString(input.provider, 'provider'),
+    request_type: normalizeString(input.request_type, 'request_type'),
+    success: normalizeBoolean(input.success),
+    fallback_used: normalizeBoolean(input.fallback_used),
+    cache_hit: normalizeBoolean(input.cache_hit),
+    upstream_status: normalizeNumber(
+      input.upstream_status,
+      'upstream_status'
+    ),
+    quota:
+      input.quota && typeof input.quota === 'object'
+        ? input.quota
+        : null,
+    error_message:
+      String(input.error_message ?? '').trim() || null,
+    created_at: new Date().toISOString()
+  };
+
+  const { data, error } = await supabase
+    .from('odds_provider_usage')
+    .insert(entry)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Supabase addOddsProviderUsage error:', error);
+    throw new HttpError(
+      500,
+      'Failed to save odds provider usage'
+    );
+  }
+
+  return data;
+}
+
+export async function listOddsProviderUsage({
+  since = null,
+  limit = 1000
+} = {}) {
+  let query = supabase
+    .from('odds_provider_usage')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(Math.min(Number(limit) || 1000, 5000));
+
+  if (since) {
+    query = query.gte('created_at', since);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error('Supabase listOddsProviderUsage error:', error);
+    throw new HttpError(
+      500,
+      'Failed to read odds provider usage'
+    );
+  }
+
+  return data || [];
+}
+
+export async function getOddsProviderUsageSummary({
+  since = null
+} = {}) {
+  const rows = await listOddsProviderUsage({
+    since,
+    limit: 5000
+  });
+
+  const providers = {};
+
+  for (const row of rows) {
+    if (!providers[row.provider]) {
+      providers[row.provider] = {
+        requests: 0,
+        successes: 0,
+        failures: 0,
+        fallbacks: 0,
+        cache_hits: 0,
+        last_request_at: null,
+        last_success_at: null,
+        last_failure_at: null,
+        last_error: null,
+        last_quota: null
+      };
+    }
+
+    const provider = providers[row.provider];
+
+    provider.requests += 1;
+
+    if (row.success) {
+      provider.successes += 1;
+
+      if (!provider.last_success_at) {
+        provider.last_success_at = row.created_at;
+      }
+    } else {
+      provider.failures += 1;
+
+      if (!provider.last_failure_at) {
+        provider.last_failure_at = row.created_at;
+        provider.last_error = row.error_message;
+      }
+    }
+
+    if (row.fallback_used) {
+      provider.fallbacks += 1;
+    }
+
+    if (row.cache_hit) {
+      provider.cache_hits += 1;
+    }
+
+    if (!provider.last_request_at) {
+      provider.last_request_at = row.created_at;
+    }
+
+    if (!provider.last_quota && row.quota) {
+      provider.last_quota = row.quota;
+    }
+  }
+
+  return {
+    since,
+    total_rows: rows.length,
+    providers
+  };
+}
