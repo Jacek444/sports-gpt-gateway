@@ -81,20 +81,26 @@ router.get('/:sport/events', async (req, res, next) => {
 
 router.get('/:sport/events/:eventId/odds', async (req, res, next) => {
   try {
-    const result = await withOddsProviderFallback((provider) =>
-      provider.getEventOdds(
-        req.params.sport,
-        req.params.eventId,
-        {
-          regions: req.query.regions || 'us',
-          markets: req.query.markets,
-          oddsFormat: req.query.oddsFormat || 'american',
-          dateFormat: req.query.dateFormat || 'iso',
-          bookmakers: req.query.bookmakers,
-          includeMultipliers: req.query.includeMultipliers
-        }
-      )
+    const provider = getOddsProvider();
+
+    const result = await provider.getEventOdds(
+      req.params.sport,
+      req.params.eventId,
+      {
+        regions: req.query.regions || 'us',
+        markets: req.query.markets,
+        oddsFormat: req.query.oddsFormat || 'american',
+        dateFormat: req.query.dateFormat || 'iso',
+        bookmakers: req.query.bookmakers,
+        includeMultipliers: req.query.includeMultipliers
+      }
     );
+
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
 
     res.json(result);
   } catch (error) {
