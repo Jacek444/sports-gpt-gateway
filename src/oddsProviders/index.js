@@ -3,11 +3,13 @@ import { HttpError } from '../errors.js';
 import { theOddsApiProvider } from './theOddsApiProvider.js';
 import { oddsApiIoProvider } from './oddsApiIoProvider.js';
 import { sportsGameOddsProvider } from './sportsGameOddsProvider.js';
+import { parlayApiProvider } from './parlayApiProvider.js';
 
 const providers = {
   theOddsApi: theOddsApiProvider,
   oddsApiIo: oddsApiIoProvider,
-  sportsGameOdds: sportsGameOddsProvider
+  sportsGameOdds: sportsGameOddsProvider,
+  parlayApi: parlayApiProvider
 };
 
 function isConfigured(name) {
