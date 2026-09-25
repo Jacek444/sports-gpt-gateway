@@ -130,13 +130,28 @@ export async function addBetLogEntry(input) {
     ev_percent: normalizeNumber(input.ev_percent, 'ev_percent'),
     fair_odds: input.fair_odds ?? null,
     kelly_percent: normalizeNumber(input.kelly_percent, 'kelly_percent'),
-    reason: String(input.reason ?? '').trim() || null,
-    result: String(input.result ?? '').trim() || null,
-    payout_usd: normalizeNumber(input.payout_usd, 'payout_usd', { minimum: 0 }),
-    closing_line: input.closing_line ?? null,
-    clv_notes: String(input.clv_notes ?? '').trim() || null,
-    postmortem: String(input.postmortem ?? '').trim() || null,
-    created_at: new Date().toISOString()
+ reason: String(input.reason ?? '').trim() || null,
+
+confidence: String(input.confidence ?? '').trim() || null,
+primary_script: String(input.primary_script ?? '').trim() || null,
+failure_script: String(input.failure_script ?? '').trim() || null,
+supporting_evidence:
+  String(input.supporting_evidence ?? '').trim() || null,
+contradicting_evidence:
+  String(input.contradicting_evidence ?? '').trim() || null,
+market_reason: String(input.market_reason ?? '').trim() || null,
+handicap_tags: Array.isArray(input.handicap_tags)
+  ? input.handicap_tags
+      .map((value) => String(value).trim())
+      .filter(Boolean)
+  : null,
+
+result: String(input.result ?? '').trim() || null,
+payout_usd: normalizeNumber(input.payout_usd, 'payout_usd', { minimum: 0 }),
+closing_line: input.closing_line ?? null,
+clv_notes: String(input.clv_notes ?? '').trim() || null,
+postmortem: String(input.postmortem ?? '').trim() || null,
+created_at: new Date().toISOString()
   };
 
   const { data, error } = await supabase
