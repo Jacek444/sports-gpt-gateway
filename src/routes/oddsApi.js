@@ -234,6 +234,23 @@ function valuesMatch(actual, expected) {
   );
 }
 
+function utcDateFromCommenceTime(value) {
+  if (!value) {
+    return null;
+  }
+
+  const timestamp =
+    Date.parse(String(value));
+
+  if (!Number.isFinite(timestamp)) {
+    return null;
+  }
+
+  return new Date(timestamp)
+    .toISOString()
+    .slice(0, 10);
+}
+
 function closingRowsFromData(data) {
   if (Array.isArray(data)) {
     return data;
@@ -266,6 +283,98 @@ function compactClosingRow(row) {
   if (!row || typeof row !== 'object') {
     return null;
   }
+
+  const marketKey =
+    firstValue(
+      row.market_key,
+      row.marketKey,
+      row.market
+    );
+
+  const homeLine =
+    firstValue(
+      row.home_spread,
+      row.homeSpread,
+      row.home_line,
+      row.homeLine
+    );
+
+  const awayLine =
+    firstValue(
+      row.away_spread,
+      row.awaySpread,
+      row.away_line,
+      row.awayLine
+    );
+
+  const homePrice =
+    firstValue(
+      row.home_spread_odds,
+      row.homeSpreadOdds,
+      row.home_moneyline,
+      row.homeMoneyline,
+      row.home_odds,
+      row.homeOdds
+    );
+
+  const awayPrice =
+    firstValue(
+      row.away_spread_odds,
+      row.awaySpreadOdds,
+      row.away_moneyline,
+      row.awayMoneyline,
+      row.away_odds,
+      row.awayOdds
+    );
+
+  const drawPrice =
+    firstValue(
+      row.draw_odds,
+      row.drawOdds,
+      row.draw_price,
+      row.drawPrice
+    );
+
+  const total =
+    firstValue(
+      row.total,
+      row.total_points,
+      row.totalPoints,
+      row.over_under,
+      row.overUnder
+    );
+
+  const overPrice =
+    firstValue(
+      row.over_odds,
+      row.overOdds,
+      row.over_price,
+      row.overPrice
+    );
+
+  const underPrice =
+    firstValue(
+      row.under_odds,
+      row.underOdds,
+      row.under_price,
+      row.underPrice
+    );
+
+  const genericLine =
+    firstValue(
+      row.line,
+      row.point,
+      row.closing_line,
+      row.close_line
+    );
+
+  const genericPrice =
+    firstValue(
+      row.price,
+      row.odds,
+      row.closing_odds,
+      row.close_odds
+    );
 
   return {
     canonical_event_id:
@@ -312,11 +421,7 @@ function compactClosingRow(row) {
       ),
 
     market_key:
-      firstValue(
-        row.market_key,
-        row.marketKey,
-        row.market
-      ),
+      marketKey,
 
     player:
       firstValue(
@@ -334,32 +439,34 @@ function compactClosingRow(row) {
       ),
 
     line:
-      firstValue(
-        row.line,
-        row.point,
-        row.closing_line,
-        row.close_line
-      ),
+      genericLine,
 
     price:
-      firstValue(
-        row.price,
-        row.odds,
-        row.closing_odds,
-        row.close_odds
-      ),
+      genericPrice,
+
+    home_line:
+      homeLine,
+
+    home_price:
+      homePrice,
+
+    away_line:
+      awayLine,
+
+    away_price:
+      awayPrice,
+
+    draw_price:
+      drawPrice,
+
+    total:
+      total,
 
     over_price:
-      firstValue(
-        row.over_price,
-        row.overPrice
-      ),
+      overPrice,
 
     under_price:
-      firstValue(
-        row.under_price,
-        row.underPrice
-      ),
+      underPrice,
 
     retired:
       row.retired ?? null,
@@ -824,6 +931,11 @@ oddsApiRouter.post(
   Pulls ParlayAPI historical closing odds, then filters the
   potentially large response inside the gateway before it is
   returned to GPT.
+
+  If commence_time is supplied, the ParlayAPI archive date is
+  derived from the event's UTC start date. This avoids date
+  mismatches for late U.S. games that occur on the following
+  calendar date in UTC.
 */
 oddsApiRouter.get(
   '/:sport/clv-lookup',
@@ -832,14 +944,37 @@ oddsApiRouter.get(
       const sport =
         req.params.sport;
 
+      const commenceTime =
+        req.query.commence_time ||
+        null;
+
+      const suppliedDate =
+        req.query.date ||
+        null;
+
+      const derivedDate =
+        utcDateFromCommenceTime(
+          commenceTime
+        );
+
+      /*
+        Prefer commence_time because ParlayAPI's historical
+        archive may use the UTC event date.
+
+        Fall back to an explicitly supplied date for older
+        bets that do not yet have commence_time stored.
+      */
       const date =
-        req.query.date || null;
+        derivedDate ||
+        suppliedDate;
 
       const homeTeam =
-        req.query.home_team || null;
+        req.query.home_team ||
+        null;
 
       const awayTeam =
-        req.query.away_team || null;
+        req.query.away_team ||
+        null;
 
       const market =
         req.query.market ||
@@ -852,16 +987,21 @@ oddsApiRouter.get(
         null;
 
       const player =
-        req.query.player || null;
+        req.query.player ||
+        null;
 
       const requestedLimit =
         Number(req.query.limit);
 
       const limit =
-        Number.isFinite(requestedLimit)
+        Number.isFinite(
+          requestedLimit
+        )
           ? Math.min(
               Math.max(
-                Math.trunc(requestedLimit),
+                Math.trunc(
+                  requestedLimit
+                ),
                 1
               ),
               100
@@ -872,7 +1012,19 @@ oddsApiRouter.get(
         return res.status(400).json({
           error: {
             message:
-              'date is required for CLV lookup'
+              'date or commence_time is required for CLV lookup'
+          }
+        });
+      }
+
+      if (
+        commenceTime &&
+        !derivedDate
+      ) {
+        return res.status(400).json({
+          error: {
+            message:
+              'commence_time must be a valid date-time'
           }
         });
       }
@@ -888,12 +1040,17 @@ oddsApiRouter.get(
 
       const params = {
         date,
+
         markets:
           market,
+
         bookmakers:
-          bookmaker || undefined,
+          bookmaker ||
+          undefined,
+
         player:
-          player || undefined
+          player ||
+          undefined
       };
 
       const result =
@@ -911,9 +1068,9 @@ oddsApiRouter.get(
               `clv-lookup:parlayApi:${sport}:${JSON.stringify(params)}`,
 
             /*
-              Historical closing lines do not change once captured,
-              so a long cache protects credits when the same lookup
-              is repeated.
+              Historical closes do not change once captured.
+              A long cache keeps repeated CLV analysis from
+              repeatedly consuming ParlayAPI credits.
             */
             cacheTtlMs:
               6 * 60 * 60 * 1000,
@@ -943,7 +1100,9 @@ oddsApiRouter.get(
             )
           )
           .slice(0, limit)
-          .map(compactClosingRow)
+          .map(
+            compactClosingRow
+          )
           .filter(Boolean);
 
       res.json({
@@ -953,14 +1112,33 @@ oddsApiRouter.get(
 
         filters: {
           sport,
-          date,
+
+          archive_date:
+            date,
+
+          supplied_date:
+            suppliedDate,
+
+          commence_time:
+            commenceTime,
+
+          date_source:
+            derivedDate
+              ? 'commence_time_utc'
+              : 'supplied_date',
+
           home_team:
             homeTeam,
+
           away_team:
             awayTeam,
+
           market,
+
           bookmaker,
+
           player,
+
           limit
         },
 
@@ -974,7 +1152,8 @@ oddsApiRouter.get(
           matchedRows,
 
         quota:
-          result?.quota || null,
+          result?.quota ||
+          null,
 
         cache:
           result?.cache || {
@@ -994,10 +1173,6 @@ oddsApiRouter.get(
 
 /*
   ParlayAPI historical closing-line endpoint.
-
-  This remains useful for direct historical closing-line
-  inspection even though the CLV grader can handle most
-  automatic grading use cases.
 */
 oddsApiRouter.get(
   '/:sport/closing-odds',
