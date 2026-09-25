@@ -20,18 +20,35 @@ function requireApiKey() {
 
 function addParams(url, params = {}) {
   for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null && value !== '') {
+    if (
+      value !== undefined &&
+      value !== null &&
+      value !== ''
+    ) {
       url.searchParams.set(key, String(value));
     }
   }
 }
 
-async function call(pathname, params = {}) {
+async function call(
+  pathname,
+  params = {},
+  {
+    method = 'GET',
+    body = null,
+    headers = {}
+  } = {}
+) {
   const providerConfig = requireApiKey();
 
-  const url = new URL(pathname, providerConfig.baseUrl);
+  const url = new URL(
+    pathname,
+    providerConfig.baseUrl
+  );
 
-  addParams(url, params);
+  if (method === 'GET') {
+    addParams(url, params);
+  }
 
   const controller = new AbortController();
 
@@ -44,10 +61,22 @@ async function call(pathname, params = {}) {
 
   try {
     response = await fetch(url, {
+      method,
       headers: {
         Accept: 'application/json',
-        'X-API-Key': providerConfig.apiKey
+        'X-API-Key': providerConfig.apiKey,
+        ...(body !== null
+          ? {
+              'Content-Type':
+                'application/json'
+            }
+          : {}),
+        ...headers
       },
+      body:
+        body !== null
+          ? JSON.stringify(body)
+          : undefined,
       signal: controller.signal
     });
   } catch (error) {
@@ -60,7 +89,9 @@ async function call(pathname, params = {}) {
         provider: 'parlayApi',
         status: 0,
         upstreamStatus: 0,
-        body: error?.message || String(error)
+        body:
+          error?.message ||
+          String(error)
       }
     );
   }
@@ -69,12 +100,15 @@ async function call(pathname, params = {}) {
 
   const text = await response.text();
 
-  let body;
+  let responseBody;
 
   try {
-    body = text ? JSON.parse(text) : null;
+    responseBody =
+      text
+        ? JSON.parse(text)
+        : null;
   } catch {
-    body = text;
+    responseBody = text;
   }
 
   if (!response.ok) {
@@ -84,60 +118,121 @@ async function call(pathname, params = {}) {
       {
         provider: 'parlayApi',
         status: response.status,
-        upstreamStatus: response.status,
-        statusText: response.statusText,
-        retryAfter: response.headers.get('retry-after'),
-        body
+        upstreamStatus:
+          response.status,
+        statusText:
+          response.statusText,
+        retryAfter:
+          response.headers.get(
+            'retry-after'
+          ),
+        body: responseBody
       }
     );
   }
 
   return {
     provider: 'parlayApi',
-    data: body,
+
+    data: responseBody,
+
     quota: {
       remaining:
-        response.headers.get('x-credits-remaining') ??
-        response.headers.get('x-requests-remaining'),
+        response.headers.get(
+          'x-credits-remaining'
+        ) ??
+        response.headers.get(
+          'x-requests-remaining'
+        ),
+
       used:
-        response.headers.get('x-credits-used') ??
-        response.headers.get('x-requests-used'),
+        response.headers.get(
+          'x-credits-used'
+        ) ??
+        response.headers.get(
+          'x-requests-used'
+        ),
+
       last:
-        response.headers.get('x-credits-cost') ??
-        response.headers.get('x-requests-last')
+        response.headers.get(
+          'x-credits-cost'
+        ) ??
+        response.headers.get(
+          'x-requests-last'
+        )
     }
   };
 }
 
 export const parlayApiProvider = {
   getSports(params = {}) {
-    return call('/v1/sports', params);
+    return call(
+      '/v1/sports',
+      params
+    );
   },
 
-  getOddsBoard(sport, params = {}) {
-    return call(`/v1/sports/${sport}/odds`, params);
+  getOddsBoard(
+    sport,
+    params = {}
+  ) {
+    return call(
+      `/v1/sports/${sport}/odds`,
+      params
+    );
   },
 
-  getScores(sport, params = {}) {
-    return call(`/v1/sports/${sport}/scores`, params);
+  getScores(
+    sport,
+    params = {}
+  ) {
+    return call(
+      `/v1/sports/${sport}/scores`,
+      params
+    );
   },
 
-  getEvents(sport, params = {}) {
-    return call(`/v1/sports/${sport}/events`, params);
+  getEvents(
+    sport,
+    params = {}
+  ) {
+    return call(
+      `/v1/sports/${sport}/events`,
+      params
+    );
   },
 
-  getEventOdds(sport, eventId, params = {}) {
+  getEventOdds(
+    sport,
+    eventId,
+    params = {}
+  ) {
     return call(
       `/v1/sports/${sport}/events/${eventId}/odds`,
       params
     );
   },
 
-  getClosingOdds(sport, params = {}) {
+  getClosingOdds(
+    sport,
+    params = {}
+  ) {
     return call(
       `/v1/historical/sports/${sport}/closing-odds`,
       params
     );
+  },
+
+  gradeClvHistory(
+    body = {}
+  ) {
+    return call(
+      '/v1/clv/history',
+      {},
+      {
+        method: 'POST',
+        body
+      }
+    );
   }
 };
-
