@@ -180,6 +180,28 @@ export async function updateBetLogEntry(id, input) {
   if (input.closing_line !== undefined) {
     updates.closing_line = input.closing_line ?? null;
   }
+  if (input.closing_odds !== undefined) {
+  updates.closing_odds =
+    String(input.closing_odds ?? '').trim() || null;
+}
+
+if (input.closing_book !== undefined) {
+  updates.closing_book =
+    String(input.closing_book ?? '').trim() || null;
+}
+
+if (input.clv_percent !== undefined) {
+  updates.clv_percent = normalizeNumber(
+    input.clv_percent,
+    'clv_percent'
+  );
+}
+
+if (input.clv_status !== undefined) {
+  updates.clv_status =
+    String(input.clv_status ?? '').trim() || null;
+}
+
 
   if (input.clv_notes !== undefined) {
     updates.clv_notes = String(input.clv_notes ?? '').trim() || null;
