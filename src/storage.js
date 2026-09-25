@@ -68,11 +68,40 @@ function createPostmortemId() {
   return `postmortem_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export async function listBetLogEntries() {
-  const { data, error } = await supabase
+export async function listBetLogEntries({
+  limit = 50,
+  offset = 0,
+  start_date = null,
+  end_date = null,
+  sport = null,
+  result = null
+} = {}) {
+  const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 100);
+  const safeOffset = Math.max(Number(offset) || 0, 0);
+
+  let query = supabase
     .from('bet_log')
     .select('*')
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .range(safeOffset, safeOffset + safeLimit - 1);
+
+  if (start_date) {
+    query = query.gte('date', start_date);
+  }
+
+  if (end_date) {
+    query = query.lte('date', end_date);
+  }
+
+  if (sport) {
+    query = query.eq('sport', sport);
+  }
+
+  if (result) {
+    query = query.eq('result', result);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error('Supabase listBetLogEntries error:', error);
