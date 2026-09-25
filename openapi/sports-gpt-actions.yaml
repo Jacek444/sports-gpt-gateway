@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: SharpBet Sports GPT Gateway
-  version: 2.4.0
+  version: 2.4.1
   description: >
     Unified SharpBet sports data gateway for NBA, NFL, NCAAM, NCAAF, MLB,
     and NHL. Uses the SharpBet odds-provider chain with SportsGameOdds,
@@ -801,6 +801,15 @@ paths:
           schema:
             type: string
             format: date
+
+        - in: query
+          name: event_id
+          required: false
+          description: >
+            ParlayAPI event identifier used to restrict the closing-line
+            response to a single event.
+          schema:
+            type: string
 
         - in: query
           name: markets
