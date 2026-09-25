@@ -775,7 +775,7 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
                 
 
-    /v1/odds/{sport}/closing-odds:
+  /v1/odds/{sport}/closing-odds:
     get:
       operationId: getClosingOdds
       summary: Get historical closing odds from ParlayAPI
