@@ -203,6 +203,257 @@ function compactEventResponse(result) {
   };
 }
 
+function normalizeLookupText(value) {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function valuesMatch(actual, expected) {
+  if (!expected) {
+    return true;
+  }
+
+  const actualText =
+    normalizeLookupText(actual);
+
+  const expectedText =
+    normalizeLookupText(expected);
+
+  if (!actualText || !expectedText) {
+    return false;
+  }
+
+  return (
+    actualText === expectedText ||
+    actualText.includes(expectedText) ||
+    expectedText.includes(actualText)
+  );
+}
+
+function closingRowsFromData(data) {
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if (!data || typeof data !== 'object') {
+    return [];
+  }
+
+  const candidateKeys = [
+    'data',
+    'results',
+    'rows',
+    'closing_odds',
+    'closingOdds',
+    'odds',
+    'markets'
+  ];
+
+  for (const key of candidateKeys) {
+    if (Array.isArray(data[key])) {
+      return data[key];
+    }
+  }
+
+  return [];
+}
+
+function compactClosingRow(row) {
+  if (!row || typeof row !== 'object') {
+    return null;
+  }
+
+  return {
+    canonical_event_id:
+      firstValue(
+        row.canonical_event_id,
+        row.canonicalEventId,
+        row.event_id,
+        row.eventId,
+        row.id
+      ),
+
+    home_team:
+      firstValue(
+        row.home_team,
+        row.homeTeam
+      ),
+
+    away_team:
+      firstValue(
+        row.away_team,
+        row.awayTeam
+      ),
+
+    commence_time:
+      firstValue(
+        row.commence_time,
+        row.commenceTime,
+        row.start_time,
+        row.startTime
+      ),
+
+    bookmaker:
+      firstValue(
+        row.bookmaker,
+        row.bookmaker_key,
+        row.source,
+        row.book
+      ),
+
+    bookmaker_title:
+      firstValue(
+        row.bookmaker_title,
+        row.bookmakerTitle
+      ),
+
+    market_key:
+      firstValue(
+        row.market_key,
+        row.marketKey,
+        row.market
+      ),
+
+    player:
+      firstValue(
+        row.player,
+        row.player_name,
+        row.playerName
+      ),
+
+    outcome:
+      firstValue(
+        row.outcome,
+        row.side,
+        row.selection,
+        row.name
+      ),
+
+    line:
+      firstValue(
+        row.line,
+        row.point,
+        row.closing_line,
+        row.close_line
+      ),
+
+    price:
+      firstValue(
+        row.price,
+        row.odds,
+        row.closing_odds,
+        row.close_odds
+      ),
+
+    over_price:
+      firstValue(
+        row.over_price,
+        row.overPrice
+      ),
+
+    under_price:
+      firstValue(
+        row.under_price,
+        row.underPrice
+      ),
+
+    retired:
+      row.retired ?? null,
+
+    closed_on:
+      firstValue(
+        row.closed_on,
+        row.closedOn
+      )
+  };
+}
+
+function closingRowMatches(
+  row,
+  {
+    homeTeam,
+    awayTeam,
+    market,
+    bookmaker,
+    player
+  }
+) {
+  if (
+    homeTeam &&
+    !valuesMatch(
+      firstValue(
+        row.home_team,
+        row.homeTeam
+      ),
+      homeTeam
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    awayTeam &&
+    !valuesMatch(
+      firstValue(
+        row.away_team,
+        row.awayTeam
+      ),
+      awayTeam
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    market &&
+    !valuesMatch(
+      firstValue(
+        row.market_key,
+        row.marketKey,
+        row.market
+      ),
+      market
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    bookmaker &&
+    !valuesMatch(
+      firstValue(
+        row.bookmaker,
+        row.bookmaker_key,
+        row.source,
+        row.book
+      ),
+      bookmaker
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    player &&
+    !valuesMatch(
+      firstValue(
+        row.player,
+        row.player_name,
+        row.playerName
+      ),
+      player
+    )
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
 oddsApiRouter.get(
   '/status',
   async (req, res, next) => {
@@ -561,6 +812,180 @@ oddsApiRouter.post(
         );
 
       res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/*
+  Compact CLV lookup.
+
+  Pulls ParlayAPI historical closing odds, then filters the
+  potentially large response inside the gateway before it is
+  returned to GPT.
+*/
+oddsApiRouter.get(
+  '/:sport/clv-lookup',
+  async (req, res, next) => {
+    try {
+      const sport =
+        req.params.sport;
+
+      const date =
+        req.query.date || null;
+
+      const homeTeam =
+        req.query.home_team || null;
+
+      const awayTeam =
+        req.query.away_team || null;
+
+      const market =
+        req.query.market ||
+        req.query.markets ||
+        null;
+
+      const bookmaker =
+        req.query.bookmaker ||
+        req.query.bookmakers ||
+        null;
+
+      const player =
+        req.query.player || null;
+
+      const requestedLimit =
+        Number(req.query.limit);
+
+      const limit =
+        Number.isFinite(requestedLimit)
+          ? Math.min(
+              Math.max(
+                Math.trunc(requestedLimit),
+                1
+              ),
+              100
+            )
+          : 25;
+
+      if (!date) {
+        return res.status(400).json({
+          error: {
+            message:
+              'date is required for CLV lookup'
+          }
+        });
+      }
+
+      if (!market) {
+        return res.status(400).json({
+          error: {
+            message:
+              'market is required for CLV lookup'
+          }
+        });
+      }
+
+      const params = {
+        date,
+        markets:
+          market,
+        bookmakers:
+          bookmaker || undefined,
+        player:
+          player || undefined
+      };
+
+      const result =
+        await withSpecificOddsProvider(
+          'parlayApi',
+
+          (provider) =>
+            provider.getClosingOdds(
+              sport,
+              params
+            ),
+
+          {
+            cacheKey:
+              `clv-lookup:parlayApi:${sport}:${JSON.stringify(params)}`,
+
+            /*
+              Historical closing lines do not change once captured,
+              so a long cache protects credits when the same lookup
+              is repeated.
+            */
+            cacheTtlMs:
+              6 * 60 * 60 * 1000,
+
+            requestType:
+              'clv_lookup'
+          }
+        );
+
+      const rows =
+        closingRowsFromData(
+          result?.data
+        );
+
+      const matchedRows =
+        rows
+          .filter((row) =>
+            closingRowMatches(
+              row,
+              {
+                homeTeam,
+                awayTeam,
+                market,
+                bookmaker,
+                player
+              }
+            )
+          )
+          .slice(0, limit)
+          .map(compactClosingRow)
+          .filter(Boolean);
+
+      res.json({
+        provider:
+          result?.provider ||
+          'parlayApi',
+
+        filters: {
+          sport,
+          date,
+          home_team:
+            homeTeam,
+          away_team:
+            awayTeam,
+          market,
+          bookmaker,
+          player,
+          limit
+        },
+
+        source_row_count:
+          rows.length,
+
+        matched_count:
+          matchedRows.length,
+
+        data:
+          matchedRows,
+
+        quota:
+          result?.quota || null,
+
+        cache:
+          result?.cache || {
+            hit: false
+          },
+
+        note:
+          matchedRows.length > 0
+            ? null
+            : 'No closing rows matched the supplied filters. Missing archive coverage or naming differences are possible.'
+      });
     } catch (error) {
       next(error);
     }
