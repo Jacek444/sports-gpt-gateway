@@ -14,8 +14,23 @@ export const logsRouter = express.Router();
 
 logsRouter.get('/bet-log', async (req, res, next) => {
   try {
-    const entries = await listBetLogEntries();
-    res.json({ data: entries });
+    const entries = await listBetLogEntries({
+      limit: req.query.limit,
+      offset: req.query.offset,
+      start_date: req.query.start_date,
+      end_date: req.query.end_date,
+      sport: req.query.sport,
+      result: req.query.result
+    });
+
+    res.json({
+      data: entries,
+      pagination: {
+        limit: Math.min(Math.max(Number(req.query.limit) || 50, 1), 100),
+        offset: Math.max(Number(req.query.offset) || 0, 0),
+        returned: entries.length
+      }
+    });
   } catch (error) {
     next(error);
   }
