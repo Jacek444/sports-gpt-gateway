@@ -1,8 +1,8 @@
- openapi: 3.1.0
+openapi: 3.1.0
 
 info:
   title: SharpBet Sports GPT Gateway
-  version: 2.7.0
+  version: 2.8.0
   description: >
     Unified SharpBet sports data gateway for NBA, NFL, NCAAM, NCAAF, MLB,
     and NHL. Uses the SharpBet odds-provider chain with SportsGameOdds,
@@ -10,7 +10,7 @@ info:
     Includes odds, scores, events, event-specific odds, provider status,
     persistent provider usage history, paginated betting logs,
     recommendation snapshots, structured handicap tags, CLV tracking,
-    event/market identifiers, ParlayAPI CLV history grading, compact CLV lookup with UTC archive-date matching and normalized closing fields, and postmortems.
+    event/market identifiers, ParlayAPI CLV history grading, compact CLV lookup, and postmortems.
 
 servers:
   - url: https://sports-gpt-gateway.onrender.com
@@ -779,11 +779,11 @@ paths:
   /v1/odds/clv/history:
     post:
       operationId: gradeClvHistory
-      summary: Grade historical CLV for a wager using ParlayAPI
+      summary: Grade historical CLV for one or more wagers using ParlayAPI
       description: >
-        Sends a historical wager description to ParlayAPI's CLV grader.
-        This endpoint is intended for post-bet closing-line analysis and
-        does not consume the primary SportsGameOdds live-odds workflow.
+        Sends a batch of historical wager descriptions to ParlayAPI's CLV
+        history grader. ParlayAPI returns raw CLV and, when available,
+        no-vig CLV.
       requestBody:
         required: true
         content:
@@ -791,79 +791,15 @@ paths:
             schema:
               type: object
               properties:
-                event_id:
-                  type:
-                    - string
-                    - "null"
-                  description: >
-                    ParlayAPI event identifier when known.
-
-                sport_key:
-                  type:
-                    - string
-                    - "null"
-                  description: >
-                    Normalized sport key such as americanfootball_nfl,
-                    basketball_nba, basketball_ncaab,
-                    americanfootball_ncaaf, baseball_mlb, or icehockey_nhl.
-
-                market:
-                  type:
-                    - string
-                    - "null"
-                  description: >
-                    Normalized market key such as h2h, spreads, totals,
-                    or a supported player-prop market.
-
-                line:
-                  type:
-                    - string
-                    - number
-                    - "null"
-                  description: >
-                    Wager line or point when applicable.
-
-                outcome:
-                  type:
-                    - string
-                    - "null"
-                  description: >
-                    Team, player, side, over/under, or other wager outcome.
-
-                taken_odds:
-                  type:
-                    - string
-                    - number
-                    - "null"
-                  description: >
-                    Price taken on the original wager.
-
-                bookmaker:
-                  type:
-                    - string
-                    - "null"
-                  description: >
-                    Sportsbook or bookmaker for the original wager when known.
-
-                home_team:
-                  type:
-                    - string
-                    - "null"
-
-                away_team:
-                  type:
-                    - string
-                    - "null"
-
-                game_date:
-                  type:
-                    - string
-                    - "null"
-                  description: >
-                    Event date used to match historical closing data.
-                  format: date
-
-              additionalProperties: true
+                bets:
+                  type: array
+                  minItems: 1
+                  maxItems: 50
+                  items:
+                    $ref: "#/components/schemas/ClvGradeBetInput"
+              required:
+                - bets
+              additionalProperties: false
 
       responses:
         "200":
@@ -887,6 +823,268 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /v1/odds/clv/grade-and-save:
+    post:
+      operationId: gradeAndSaveClv
+      summary: Grade logged bets for CLV and optionally save the results
+      description: >
+        Sends up to 50 wagers to ParlayAPI's CLV history grader. The
+        gateway derives game_date from commence_time when available,
+        prefers no-vig CLV when returned, and can save closing_line,
+        closing_odds, closing_book, clv_percent, clv_status, and
+        clv_notes into the existing SharpBet bet log.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                write_back:
+                  type: boolean
+                  default: true
+                  description: >
+                    When true, every wager must include bet_id and
+                    the grading result is saved into that bet-log row.
+
+                bets:
+                  type: array
+                  minItems: 1
+                  maxItems: 50
+                  items:
+                    type: object
+                    properties:
+                      bet_id:
+                        type:
+                          - string
+                          - "null"
+
+                      sport_key:
+                        type:
+                          - string
+                          - "null"
+
+                      player:
+                        type:
+                          - string
+                          - "null"
+
+                      market:
+                        type:
+                          - string
+                          - "null"
+
+                      market_key:
+                        type:
+                          - string
+                          - "null"
+
+                      line:
+                        type:
+                          - string
+                          - number
+                          - "null"
+
+                      outcome:
+                        type:
+                          - string
+                          - "null"
+
+                      outcome_key:
+                        type:
+                          - string
+                          - "null"
+
+                      selection:
+                        type:
+                          - string
+                          - "null"
+
+                      taken_odds:
+                        type:
+                          - string
+                          - number
+                          - "null"
+
+                      odds:
+                        type:
+                          - string
+                          - number
+                          - "null"
+
+                      sportsbook:
+                        type:
+                          - string
+                          - "null"
+
+                      home_team:
+                        type:
+                          - string
+                          - "null"
+
+                      away_team:
+                        type:
+                          - string
+                          - "null"
+
+                      game_date:
+                        type:
+                          - string
+                          - "null"
+                        format: date
+
+                      date:
+                        type:
+                          - string
+                          - "null"
+                        format: date
+
+                      commence_time:
+                        type:
+                          - string
+                          - "null"
+                        format: date-time
+
+                    additionalProperties: true
+
+              required:
+                - bets
+
+              additionalProperties: false
+
+      responses:
+        "200":
+          description: CLV grading and optional bet-log write-back result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  provider:
+                    type: string
+
+                  write_back:
+                    type: boolean
+
+                  submitted:
+                    type: integer
+
+                  provider_result_count:
+                    type: integer
+
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        bet_index:
+                          type: integer
+
+                        bet_id:
+                          type:
+                            - string
+                            - "null"
+
+                        game_date:
+                          type:
+                            - string
+                            - "null"
+
+                        sport_key:
+                          type:
+                            - string
+                            - "null"
+
+                        market:
+                          type:
+                            - string
+                            - "null"
+
+                        outcome:
+                          type:
+                            - string
+                            - "null"
+
+                        provider_result:
+                          oneOf:
+                            - type: object
+                              additionalProperties: true
+                            - type: "null"
+
+                        log_update:
+                          type: object
+                          properties:
+                            closing_line:
+                              type:
+                                - string
+                                - number
+                                - "null"
+
+                            closing_odds:
+                              type:
+                                - string
+                                - "null"
+
+                            closing_book:
+                              type:
+                                - string
+                                - "null"
+
+                            clv_percent:
+                              type:
+                                - number
+                                - "null"
+
+                            clv_status:
+                              type:
+                                - string
+                                - "null"
+
+                            clv_notes:
+                              type:
+                                - string
+                                - "null"
+
+                          additionalProperties: true
+
+                        saved:
+                          type: boolean
+
+                        saved_entry:
+                          oneOf:
+                            - $ref: "#/components/schemas/BetLogEntry"
+                            - type: "null"
+
+                      additionalProperties: true
+
+                  quota:
+                    oneOf:
+                      - type: object
+                        additionalProperties: true
+                      - type: "null"
+
+                  cache:
+                    type: object
+                    properties:
+                      hit:
+                        type: boolean
+                    additionalProperties: true
+
+                additionalProperties: true
+
+        "400":
+          description: Invalid CLV batch or missing required matching fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+        "502":
+          description: ParlayAPI CLV grading request failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /v1/odds/{sport}/clv-lookup:
     get:
@@ -910,7 +1108,9 @@ paths:
         - in: query
           name: date
           required: false
-          description: Closing-line date in YYYY-MM-DD format
+          description: >
+            Closing-line date in YYYY-MM-DD format. Optional when
+            commence_time is supplied.
           schema:
             type: string
             format: date
@@ -919,9 +1119,8 @@ paths:
           name: commence_time
           required: false
           description: >
-            Scheduled event start time. When supplied, the gateway derives
-            the ParlayAPI archive date from the UTC event date and prefers
-            that over the supplied date.
+            Event start time. When supplied, the gateway derives the
+            UTC archive date from this timestamp and prefers it over date.
           schema:
             type: string
             format: date-time
@@ -1777,6 +1976,82 @@ components:
 
       required:
         - error
+
+      additionalProperties: true
+
+    ClvGradeBetInput:
+      type: object
+      properties:
+        bet_index:
+          type:
+            - integer
+            - "null"
+          description: >
+            Optional caller index. The SharpBet grade-and-save
+            endpoint assigns its own batch index.
+
+        sport_key:
+          type:
+            - string
+            - "null"
+          description: >
+            Normalized sport key such as americanfootball_nfl,
+            basketball_nba, basketball_ncaab,
+            americanfootball_ncaaf, baseball_mlb,
+            or icehockey_nhl.
+
+        player:
+          type:
+            - string
+            - "null"
+          description: >
+            Player name for a player prop. Leave null for
+            game markets.
+
+        market:
+          type:
+            - string
+            - "null"
+          description: >
+            Normalized market such as h2h, spreads, totals,
+            player_points, player_strikeouts, or another
+            supported market.
+
+        line:
+          type:
+            - string
+            - number
+            - "null"
+
+        outcome:
+          type:
+            - string
+            - "null"
+          description: >
+            Exact wager outcome such as a team name,
+            Over, or Under.
+
+        taken_odds:
+          type:
+            - string
+            - number
+            - "null"
+
+        home_team:
+          type:
+            - string
+            - "null"
+
+        away_team:
+          type:
+            - string
+            - "null"
+
+        game_date:
+          type:
+            - string
+            - "null"
+          format: date
 
       additionalProperties: true
 
