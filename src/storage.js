@@ -149,6 +149,10 @@ handicap_tags: Array.isArray(input.handicap_tags)
 result: String(input.result ?? '').trim() || null,
 payout_usd: normalizeNumber(input.payout_usd, 'payout_usd', { minimum: 0 }),
 closing_line: input.closing_line ?? null,
+closing_odds: String(input.closing_odds ?? '').trim() || null,
+closing_book: String(input.closing_book ?? '').trim() || null,
+clv_percent: normalizeNumber(input.clv_percent, 'clv_percent'),
+clv_status: String(input.clv_status ?? '').trim() || null,
 clv_notes: String(input.clv_notes ?? '').trim() || null,
 postmortem: String(input.postmortem ?? '').trim() || null,
 created_at: new Date().toISOString()
