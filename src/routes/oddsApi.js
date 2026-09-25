@@ -114,7 +114,10 @@ function compactEvent(event, providerName) {
   if (!status && event?.status) {
     if (event.status.live) {
       status = 'Live';
-    } else if (event.status.completed || event.status.ended) {
+    } else if (
+      event.status.completed ||
+      event.status.ended
+    ) {
       status = 'Final';
     } else if (event.status.cancelled) {
       status = 'Cancelled';
@@ -526,6 +529,51 @@ oddsApiRouter.get(
   }
 );
 
+/*
+  Historical CLV grading route.
+
+  This intentionally uses ParlayAPI directly so CLV grading
+  does not consume the normal SportsGameOdds live-odds workflow.
+*/
+oddsApiRouter.post(
+  '/clv/history',
+  async (req, res, next) => {
+    try {
+      const body =
+        req.body &&
+        typeof req.body === 'object'
+          ? req.body
+          : {};
+
+      const result =
+        await withSpecificOddsProvider(
+          'parlayApi',
+
+          (provider) =>
+            provider.gradeClvHistory(
+              body
+            ),
+
+          {
+            requestType:
+              'clv_history'
+          }
+        );
+
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/*
+  ParlayAPI historical closing-line endpoint.
+
+  This remains useful for direct historical closing-line
+  inspection even though the CLV grader can handle most
+  automatic grading use cases.
+*/
 oddsApiRouter.get(
   '/:sport/closing-odds',
   async (req, res, next) => {
