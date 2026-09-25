@@ -1385,7 +1385,7 @@ components:
             - number
             - "null"
 
-                    closing_odds:
+         closing_odds:
           type:
             - string
             - "null"
