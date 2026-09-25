@@ -564,6 +564,8 @@ function closingRowMatches(
   return true;
 }
 
+const MAX_CLV_GROUPS_PER_REQUEST = 10;
+
 function numberOrNull(value) {
   if (
     value === undefined ||
@@ -594,10 +596,168 @@ function stringOrNull(value) {
     return null;
   }
 
-  const text =
+  const textValue =
     String(value).trim();
 
-  return text || null;
+  return textValue || null;
+}
+
+function normalizeSportKey(value) {
+  const raw =
+    normalizeLookupText(value);
+
+  const aliases = {
+    nfl: 'americanfootball_nfl',
+    americanfootball_nfl:
+      'americanfootball_nfl',
+
+    nba: 'basketball_nba',
+    basketball_nba:
+      'basketball_nba',
+
+    ncaam: 'basketball_ncaab',
+    ncaab: 'basketball_ncaab',
+    basketball_ncaab:
+      'basketball_ncaab',
+
+    ncaaf: 'americanfootball_ncaaf',
+    americanfootball_ncaaf:
+      'americanfootball_ncaaf',
+
+    mlb: 'baseball_mlb',
+    baseball_mlb:
+      'baseball_mlb',
+
+    nhl: 'icehockey_nhl',
+    icehockey_nhl:
+      'icehockey_nhl'
+  };
+
+  const collapsed =
+    raw.replace(/\s+/g, '_');
+
+  return aliases[collapsed] ||
+    stringOrNull(value);
+}
+
+function normalizeMarketKey(value) {
+  const raw =
+    normalizeLookupText(value);
+
+  if (!raw) {
+    return null;
+  }
+
+  const collapsed =
+    raw.replace(/\s+/g, '_');
+
+  if (
+    collapsed === 'spread' ||
+    collapsed === 'spreads' ||
+    collapsed.includes('point_spread')
+  ) {
+    return 'spreads';
+  }
+
+  if (
+    collapsed === 'moneyline' ||
+    collapsed === 'money_line' ||
+    collapsed === 'ml' ||
+    collapsed === 'h2h' ||
+    collapsed === 'head_to_head'
+  ) {
+    return 'h2h';
+  }
+
+  if (
+    collapsed === 'total' ||
+    collapsed === 'totals' ||
+    collapsed === 'over_under' ||
+    collapsed === 'ou'
+  ) {
+    return 'totals';
+  }
+
+  return collapsed;
+}
+
+function normalizeOutcomeText(value) {
+  return normalizeLookupText(value);
+}
+
+function parseEventTeams(eventText) {
+  const value =
+    stringOrNull(eventText);
+
+  if (!value) {
+    return null;
+  }
+
+  const patterns = [
+    {
+      regex: /\s+@\s+/i,
+      orientation: 'away_home'
+    },
+    {
+      regex: /\s+at\s+/i,
+      orientation: 'away_home'
+    },
+    {
+      regex: /\s+vs\.?\s+/i,
+      orientation: 'unordered'
+    },
+    {
+      regex: /\s+v\.?\s+/i,
+      orientation: 'unordered'
+    }
+  ];
+
+  for (const pattern of patterns) {
+    const parts =
+      value
+        .split(pattern.regex)
+        .map((part) =>
+          part.trim()
+        )
+        .filter(Boolean);
+
+    if (parts.length !== 2) {
+      continue;
+    }
+
+    if (
+      pattern.orientation ===
+      'away_home'
+    ) {
+      return {
+        away_team:
+          parts[0],
+        home_team:
+          parts[1],
+        team_a:
+          parts[0],
+        team_b:
+          parts[1],
+        orientation:
+          'away_home'
+      };
+    }
+
+    return {
+      away_team:
+        null,
+      home_team:
+        null,
+      team_a:
+        parts[0],
+      team_b:
+        parts[1],
+      orientation:
+        'unordered'
+    };
+  }
+
+  return null;
 }
 
 function deriveClvGameDate(bet) {
@@ -623,25 +783,62 @@ function deriveClvGameDate(bet) {
   return explicitDate.slice(0, 10);
 }
 
-function normalizeClvBetForProvider(bet, index) {
-  const normalized = {
+function normalizeClvBet(bet, index) {
+  const parsedEvent =
+    parseEventTeams(
+      bet?.event
+    );
+
+  const homeTeam =
+    stringOrNull(
+      bet?.home_team
+    ) ||
+    parsedEvent?.home_team ||
+    null;
+
+  const awayTeam =
+    stringOrNull(
+      bet?.away_team
+    ) ||
+    parsedEvent?.away_team ||
+    null;
+
+  const teamA =
+    homeTeam ||
+    parsedEvent?.team_a ||
+    null;
+
+  const teamB =
+    awayTeam ||
+    parsedEvent?.team_b ||
+    null;
+
+  return {
     bet_index:
       index,
 
-    sport_key:
+    bet_id:
       stringOrNull(
-        bet?.sport_key
+        bet?.bet_id ||
+        bet?.id
+      ),
+
+    sport_key:
+      normalizeSportKey(
+        bet?.sport_key ||
+        bet?.league ||
+        bet?.sport
+      ),
+
+    market:
+      normalizeMarketKey(
+        bet?.market_key ||
+        bet?.market
       ),
 
     player:
       stringOrNull(
         bet?.player
-      ),
-
-    market:
-      stringOrNull(
-        bet?.market ||
-        bet?.market_key
       ),
 
     line:
@@ -662,67 +859,72 @@ function normalizeClvBetForProvider(bet, index) {
         bet?.odds
       ),
 
-    home_team:
+    bookmaker:
       stringOrNull(
-        bet?.home_team
+        bet?.bookmaker ||
+        bet?.bookmaker_key ||
+        bet?.sportsbook
       ),
 
-    away_team:
+    event:
       stringOrNull(
-        bet?.away_team
+        bet?.event
       ),
+
+    home_team:
+      homeTeam,
+
+    away_team:
+      awayTeam,
+
+    team_a:
+      teamA,
+
+    team_b:
+      teamB,
 
     game_date:
       deriveClvGameDate(
         bet
       )
   };
-
-  return normalized;
 }
 
-function validateClvBet(
-  originalBet,
-  normalizedBet
-) {
+function validateNormalizedClvBet(bet) {
   const missing = [];
 
-  if (!normalizedBet.sport_key) {
-    missing.push('sport_key');
+  if (!bet.sport_key) {
+    missing.push('sport_key or league');
   }
 
-  if (!normalizedBet.market) {
-    missing.push('market');
+  if (!bet.market) {
+    missing.push('market or market_key');
   }
 
-  if (!normalizedBet.outcome) {
-    missing.push('outcome');
+  if (!bet.outcome) {
+    missing.push('selection or outcome');
   }
 
-  if (normalizedBet.taken_odds === null) {
-    missing.push('taken_odds');
+  if (bet.taken_odds === null) {
+    missing.push('odds or taken_odds');
   }
 
-  if (!normalizedBet.game_date) {
-    missing.push('game_date or commence_time');
+  if (!bet.game_date) {
+    missing.push(
+      'commence_time or game_date/date'
+    );
   }
 
   if (
-    !normalizedBet.home_team ||
-    !normalizedBet.away_team
+    !bet.team_a ||
+    !bet.team_b
   ) {
     missing.push(
-      'home_team and away_team'
+      'home_team/away_team or a parseable event string'
     );
   }
 
   return {
-    bet_id:
-      stringOrNull(
-        originalBet?.bet_id ||
-        originalBet?.id
-      ),
-
     valid:
       missing.length === 0,
 
@@ -730,225 +932,1142 @@ function validateClvBet(
   };
 }
 
-function extractClvResults(result) {
-  const data =
-    result?.data;
-
-  if (Array.isArray(data)) {
-    return data;
-  }
-
-  if (
-    data &&
-    Array.isArray(data.results)
-  ) {
-    return data.results;
-  }
-
-  if (
-    data &&
-    Array.isArray(data.bets)
-  ) {
-    return data.bets;
-  }
-
-  if (
-    data &&
-    Array.isArray(data.data)
-  ) {
-    return data.data;
-  }
-
-  if (
-    Array.isArray(result?.results)
-  ) {
-    return result.results;
-  }
-
-  if (
-    Array.isArray(result?.bets)
-  ) {
-    return result.bets;
-  }
-
-  return [];
+function clvGroupKey(bet) {
+  return JSON.stringify([
+    bet.sport_key,
+    bet.game_date,
+    bet.market,
+    bet.player || ''
+  ]);
 }
 
-function findClvResultForIndex(
-  results,
-  index
+function closingRowEventMatches(
+  row,
+  bet
 ) {
-  const exact =
-    results.find(
-      (row) =>
-        Number(
-          row?.bet_index
-        ) === index
+  const rowHome =
+    firstValue(
+      row?.home_team,
+      row?.homeTeam
     );
 
-  if (exact) {
-    return exact;
+  const rowAway =
+    firstValue(
+      row?.away_team,
+      row?.awayTeam
+    );
+
+  if (!rowHome || !rowAway) {
+    return false;
   }
 
-  return results[index] || null;
+  if (
+    bet.home_team &&
+    bet.away_team
+  ) {
+    return (
+      valuesMatch(
+        rowHome,
+        bet.home_team
+      ) &&
+      valuesMatch(
+        rowAway,
+        bet.away_team
+      )
+    );
+  }
+
+  const directPair =
+    valuesMatch(
+      rowHome,
+      bet.team_a
+    ) &&
+    valuesMatch(
+      rowAway,
+      bet.team_b
+    );
+
+  const reversedPair =
+    valuesMatch(
+      rowHome,
+      bet.team_b
+    ) &&
+    valuesMatch(
+      rowAway,
+      bet.team_a
+    );
+
+  return (
+    directPair ||
+    reversedPair
+  );
 }
 
-function buildClvLogUpdate(
-  providerRow,
-  normalizedBet
+function closingRowMarketMatches(
+  row,
+  market
 ) {
-  if (
-    !providerRow ||
-    typeof providerRow !== 'object'
-  ) {
-    return {
-      clv_status:
-        'no_result',
+  const rowMarket =
+    normalizeMarketKey(
+      firstValue(
+        row?.market_key,
+        row?.marketKey,
+        row?.market
+      )
+    );
 
-      clv_notes:
-        `ParlayAPI CLV grader returned no result for bet_index=${normalizedBet.bet_index}.`
+  /*
+    Some historical rows omit the market field because
+    the request already filtered to a single market.
+  */
+  if (!rowMarket) {
+    return true;
+  }
+
+  return rowMarket === market;
+}
+
+function closingRowPlayerMatches(
+  row,
+  player
+) {
+  if (!player) {
+    return true;
+  }
+
+  const rowPlayer =
+    firstValue(
+      row?.player,
+      row?.player_name,
+      row?.playerName
+    );
+
+  return valuesMatch(
+    rowPlayer,
+    player
+  );
+}
+
+function bookmakerMatches(
+  row,
+  bookmaker
+) {
+  if (!bookmaker) {
+    return false;
+  }
+
+  const rowBook =
+    firstValue(
+      row?.bookmaker,
+      row?.bookmaker_key,
+      row?.source,
+      row?.book,
+      row?.bookmaker_title,
+      row?.bookmakerTitle
+    );
+
+  return valuesMatch(
+    rowBook,
+    bookmaker
+  );
+}
+
+function americanToDecimal(value) {
+  const odds =
+    numberOrNull(value);
+
+  if (
+    odds === null ||
+    odds === 0
+  ) {
+    return null;
+  }
+
+  if (odds > 0) {
+    return 1 + odds / 100;
+  }
+
+  return 1 + 100 / Math.abs(odds);
+}
+
+function americanToImpliedProbability(
+  value
+) {
+  const odds =
+    numberOrNull(value);
+
+  if (
+    odds === null ||
+    odds === 0
+  ) {
+    return null;
+  }
+
+  if (odds > 0) {
+    return 100 / (odds + 100);
+  }
+
+  return (
+    Math.abs(odds) /
+    (Math.abs(odds) + 100)
+  );
+}
+
+function impliedProbabilityToAmerican(
+  probability
+) {
+  const p =
+    Number(probability);
+
+  if (
+    !Number.isFinite(p) ||
+    p <= 0 ||
+    p >= 1
+  ) {
+    return null;
+  }
+
+  if (p >= 0.5) {
+    return Math.round(
+      -100 * p / (1 - p)
+    );
+  }
+
+  return Math.round(
+    100 * (1 - p) / p
+  );
+}
+
+function median(values) {
+  const numbers =
+    values
+      .map(numberOrNull)
+      .filter(
+        (value) =>
+          value !== null
+      )
+      .sort(
+        (a, b) =>
+          a - b
+      );
+
+  if (!numbers.length) {
+    return null;
+  }
+
+  const middle =
+    Math.floor(
+      numbers.length / 2
+    );
+
+  if (
+    numbers.length % 2 === 1
+  ) {
+    return numbers[middle];
+  }
+
+  return (
+    numbers[middle - 1] +
+    numbers[middle]
+  ) / 2;
+}
+
+function chooseConsensusLine(
+  results
+) {
+  const lineValues =
+    results
+      .map(
+        (result) =>
+          result.line
+      )
+      .filter(
+        (value) =>
+          value !== null
+      );
+
+  if (!lineValues.length) {
+    return null;
+  }
+
+  const medianLine =
+    median(lineValues);
+
+  let chosen =
+    lineValues[0];
+
+  let chosenDistance =
+    Math.abs(
+      chosen -
+      medianLine
+    );
+
+  for (
+    const line of lineValues
+  ) {
+    const distance =
+      Math.abs(
+        line -
+        medianLine
+      );
+
+    if (
+      distance <
+      chosenDistance
+    ) {
+      chosen =
+        line;
+
+      chosenDistance =
+        distance;
+    }
+  }
+
+  return chosen;
+}
+
+function outcomeIsOver(value) {
+  const normalized =
+    normalizeOutcomeText(value);
+
+  return (
+    normalized === 'over' ||
+    normalized.startsWith('over ')
+  );
+}
+
+function outcomeIsUnder(value) {
+  const normalized =
+    normalizeOutcomeText(value);
+
+  return (
+    normalized === 'under' ||
+    normalized.startsWith('under ')
+  );
+}
+
+function extractClosingSelection(
+  row,
+  bet
+) {
+  const homeTeam =
+    firstValue(
+      row?.home_team,
+      row?.homeTeam
+    );
+
+  const awayTeam =
+    firstValue(
+      row?.away_team,
+      row?.awayTeam
+    );
+
+  const outcome =
+    bet.outcome;
+
+  const isHome =
+    homeTeam &&
+    valuesMatch(
+      outcome,
+      homeTeam
+    );
+
+  const isAway =
+    awayTeam &&
+    valuesMatch(
+      outcome,
+      awayTeam
+    );
+
+  const genericLine =
+    numberOrNull(
+      firstValue(
+        row?.line,
+        row?.point,
+        row?.closing_line,
+        row?.close_line
+      )
+    );
+
+  const genericPrice =
+    numberOrNull(
+      firstValue(
+        row?.price,
+        row?.odds,
+        row?.closing_odds,
+        row?.close_odds
+      )
+    );
+
+  if (bet.market === 'spreads') {
+    if (isHome) {
+      return {
+        line:
+          numberOrNull(
+            firstValue(
+              row?.home_spread,
+              row?.homeSpread,
+              row?.home_line,
+              row?.homeLine
+            )
+          ),
+
+        odds:
+          numberOrNull(
+            firstValue(
+              row?.home_spread_odds,
+              row?.homeSpreadOdds,
+              row?.home_odds,
+              row?.homeOdds
+            )
+          ),
+
+        side:
+          'home'
+      };
+    }
+
+    if (isAway) {
+      return {
+        line:
+          numberOrNull(
+            firstValue(
+              row?.away_spread,
+              row?.awaySpread,
+              row?.away_line,
+              row?.awayLine
+            )
+          ),
+
+        odds:
+          numberOrNull(
+            firstValue(
+              row?.away_spread_odds,
+              row?.awaySpreadOdds,
+              row?.away_odds,
+              row?.awayOdds
+            )
+          ),
+
+        side:
+          'away'
+      };
+    }
+
+    return null;
+  }
+
+  if (bet.market === 'h2h') {
+    if (isHome) {
+      return {
+        line:
+          null,
+
+        odds:
+          numberOrNull(
+            firstValue(
+              row?.home_moneyline,
+              row?.homeMoneyline,
+              row?.home_ml,
+              row?.homeMl,
+              row?.home_odds,
+              row?.homeOdds
+            )
+          ),
+
+        side:
+          'home'
+      };
+    }
+
+    if (isAway) {
+      return {
+        line:
+          null,
+
+        odds:
+          numberOrNull(
+            firstValue(
+              row?.away_moneyline,
+              row?.awayMoneyline,
+              row?.away_ml,
+              row?.awayMl,
+              row?.away_odds,
+              row?.awayOdds
+            )
+          ),
+
+        side:
+          'away'
+      };
+    }
+
+    const drawOutcome =
+      normalizeOutcomeText(
+        outcome
+      );
+
+    if (
+      drawOutcome === 'draw' ||
+      drawOutcome === 'tie'
+    ) {
+      return {
+        line:
+          null,
+
+        odds:
+          numberOrNull(
+            firstValue(
+              row?.draw_odds,
+              row?.drawOdds,
+              row?.draw_price,
+              row?.drawPrice
+            )
+          ),
+
+        side:
+          'draw'
+      };
+    }
+
+    return null;
+  }
+
+  if (bet.market === 'totals') {
+    const total =
+      numberOrNull(
+        firstValue(
+          row?.total,
+          row?.total_points,
+          row?.totalPoints,
+          row?.over_under,
+          row?.overUnder,
+          genericLine
+        )
+      );
+
+    if (
+      outcomeIsOver(
+        outcome
+      )
+    ) {
+      return {
+        line:
+          total,
+
+        odds:
+          numberOrNull(
+            firstValue(
+              row?.over_odds,
+              row?.overOdds,
+              row?.over_price,
+              row?.overPrice,
+              genericPrice
+            )
+          ),
+
+        side:
+          'over'
+      };
+    }
+
+    if (
+      outcomeIsUnder(
+        outcome
+      )
+    ) {
+      return {
+        line:
+          total,
+
+        odds:
+          numberOrNull(
+            firstValue(
+              row?.under_odds,
+              row?.underOdds,
+              row?.under_price,
+              row?.underPrice,
+              genericPrice
+            )
+          ),
+
+        side:
+          'under'
+      };
+    }
+
+    return null;
+  }
+
+  /*
+    Generic player-prop / alternate-market fallback.
+  */
+  const rowOutcome =
+    firstValue(
+      row?.outcome,
+      row?.side,
+      row?.selection,
+      row?.name
+    );
+
+  if (
+    rowOutcome &&
+    !valuesMatch(
+      rowOutcome,
+      outcome
+    )
+  ) {
+    return null;
+  }
+
+  let odds =
+    genericPrice;
+
+  if (
+    odds === null &&
+    outcomeIsOver(
+      outcome
+    )
+  ) {
+    odds =
+      numberOrNull(
+        firstValue(
+          row?.over_odds,
+          row?.overOdds,
+          row?.over_price,
+          row?.overPrice
+        )
+      );
+  }
+
+  if (
+    odds === null &&
+    outcomeIsUnder(
+      outcome
+    )
+  ) {
+    odds =
+      numberOrNull(
+        firstValue(
+          row?.under_odds,
+          row?.underOdds,
+          row?.under_price,
+          row?.underPrice
+        )
+      );
+  }
+
+  return {
+    line:
+      genericLine,
+
+    odds,
+
+    side:
+      outcomeIsOver(outcome)
+        ? 'over'
+        : outcomeIsUnder(outcome)
+          ? 'under'
+          : 'generic'
+  };
+}
+
+function buildConsensusClose(
+  rows,
+  bet
+) {
+  const selections =
+    rows
+      .map((row) => {
+        const extracted =
+          extractClosingSelection(
+            row,
+            bet
+          );
+
+        if (!extracted) {
+          return null;
+        }
+
+        return {
+          ...extracted,
+
+          bookmaker:
+            firstValue(
+              row?.bookmaker,
+              row?.bookmaker_key,
+              row?.source,
+              row?.book,
+              row?.bookmaker_title,
+              row?.bookmakerTitle
+            )
+        };
+      })
+      .filter(Boolean);
+
+  if (!selections.length) {
+    return null;
+  }
+
+  const chosenLine =
+    chooseConsensusLine(
+      selections
+    );
+
+  let comparable =
+    selections;
+
+  if (chosenLine !== null) {
+    comparable =
+      selections.filter(
+        (selection) =>
+          selection.line !== null &&
+          Math.abs(
+            selection.line -
+            chosenLine
+          ) < 1e-9
+      );
+  }
+
+  const implied =
+    comparable
+      .map(
+        (selection) =>
+          americanToImpliedProbability(
+            selection.odds
+          )
+      )
+      .filter(
+        (value) =>
+          value !== null
+      );
+
+  const medianImplied =
+    median(implied);
+
+  const consensusOdds =
+    medianImplied !== null
+      ? impliedProbabilityToAmerican(
+          medianImplied
+        )
+      : null;
+
+  return {
+    line:
+      chosenLine,
+
+    odds:
+      consensusOdds,
+
+    bookmaker:
+      'CONSENSUS',
+
+    source:
+      'consensus',
+
+    contributing_books:
+      comparable.length
+  };
+}
+
+function chooseClosingForBet(
+  rows,
+  bet
+) {
+  const eventRows =
+    rows.filter(
+      (row) =>
+        closingRowEventMatches(
+          row,
+          bet
+        ) &&
+        closingRowMarketMatches(
+          row,
+          bet.market
+        ) &&
+        closingRowPlayerMatches(
+          row,
+          bet.player
+        )
+    );
+
+  if (!eventRows.length) {
+    return {
+      match:
+        null,
+
+      status:
+        'no_event_match'
     };
   }
 
-  const status =
-    stringOrNull(
-      providerRow.status
+  if (bet.bookmaker) {
+    const bookRows =
+      eventRows.filter(
+        (row) =>
+          bookmakerMatches(
+            row,
+            bet.bookmaker
+          )
+      );
+
+    for (const row of bookRows) {
+      const selection =
+        extractClosingSelection(
+          row,
+          bet
+        );
+
+      if (!selection) {
+        continue;
+      }
+
+      return {
+        match: {
+          ...selection,
+
+          bookmaker:
+            firstValue(
+              row?.bookmaker_title,
+              row?.bookmakerTitle,
+              row?.bookmaker,
+              row?.bookmaker_key,
+              row?.source,
+              row?.book
+            ) ||
+            bet.bookmaker,
+
+          source:
+            'exact_book',
+
+          contributing_books:
+            1
+        },
+
+        status:
+          'matched_exact_book'
+      };
+    }
+  }
+
+  const consensus =
+    buildConsensusClose(
+      eventRows,
+      bet
+    );
+
+  if (!consensus) {
+    return {
+      match:
+        null,
+
+      status:
+        'no_selection_match'
+    };
+  }
+
+  return {
+    match:
+      consensus,
+
+    status:
+      'matched_consensus'
+  };
+}
+
+function calculateLineEdge(
+  bet,
+  closingLine
+) {
+  if (
+    bet.line === null ||
+    closingLine === null
+  ) {
+    return null;
+  }
+
+  if (bet.market === 'spreads') {
+    return (
+      bet.line -
+      closingLine
+    );
+  }
+
+  if (
+    bet.market === 'totals' ||
+    outcomeIsOver(
+      bet.outcome
     ) ||
-    'unknown';
-
-  const rawClv =
-    numberOrNull(
-      firstValue(
-        providerRow.clv_pct,
-        providerRow.raw_clv_pct,
-        providerRow.raw_clv_percent
+    outcomeIsUnder(
+      bet.outcome
+    )
+  ) {
+    if (
+      outcomeIsOver(
+        bet.outcome
       )
+    ) {
+      return (
+        closingLine -
+        bet.line
+      );
+    }
+
+    if (
+      outcomeIsUnder(
+        bet.outcome
+      )
+    ) {
+      return (
+        bet.line -
+        closingLine
+      );
+    }
+  }
+
+  return null;
+}
+
+function calculatePriceClvPercent(
+  takenOdds,
+  closingOdds
+) {
+  const takenDecimal =
+    americanToDecimal(
+      takenOdds
     );
 
-  const noVigClv =
-    numberOrNull(
-      firstValue(
-        providerRow.no_vig_clv_pct,
-        providerRow.no_vig_clv_percent
-      )
+  const closingDecimal =
+    americanToDecimal(
+      closingOdds
     );
 
-  const preferredClv =
-    noVigClv !== null
-      ? noVigClv
-      : rawClv;
+  if (
+    takenDecimal === null ||
+    closingDecimal === null
+  ) {
+    return null;
+  }
+
+  return (
+    (takenDecimal /
+      closingDecimal) -
+    1
+  ) * 100;
+}
+
+function roundMetric(
+  value,
+  decimals = 3
+) {
+  if (
+    value === null ||
+    value === undefined ||
+    !Number.isFinite(
+      Number(value)
+    )
+  ) {
+    return null;
+  }
+
+  const factor =
+    10 ** decimals;
+
+  return (
+    Math.round(
+      Number(value) *
+      factor
+    ) /
+    factor
+  );
+}
+
+function buildLocalClvUpdate(
+  bet,
+  chosen
+) {
+  if (!chosen?.match) {
+    return {
+      closing_line:
+        null,
+
+      closing_odds:
+        null,
+
+      closing_book:
+        null,
+
+      clv_percent:
+        null,
+
+      clv_status:
+        'manual_required',
+
+      clv_notes:
+        [
+          'Local CLV tracker could not match a historical closing row',
+          `match_status=${chosen?.status || 'unknown'}`,
+          `game_date=${bet.game_date}`,
+          `market=${bet.market}`
+        ].join('; ')
+    };
+  }
+
+  const closing =
+    chosen.match;
 
   const closingLine =
-    firstValue(
-      providerRow.closing_line,
-      providerRow.close_line,
-      providerRow.line_at_close
+    numberOrNull(
+      closing.line
     );
 
   const closingOdds =
-    firstValue(
-      providerRow.closing_odds,
-      providerRow.close_odds,
-      providerRow.closing_price,
-      providerRow.close_price
+    numberOrNull(
+      closing.odds
     );
 
-  const closingBook =
-    firstValue(
-      providerRow.closing_book,
-      providerRow.closing_source,
-      providerRow.source,
-      providerRow.bookmaker
-    );
+  const lineApplicable =
+    bet.market !== 'h2h' &&
+    bet.line !== null &&
+    closingLine !== null;
 
-  const metric =
-    noVigClv !== null
-      ? 'no_vig_clv_pct'
-      : rawClv !== null
-        ? 'clv_pct'
-        : 'none';
+  const sameLine =
+    !lineApplicable ||
+    Math.abs(
+      bet.line -
+      closingLine
+    ) < 1e-9;
+
+  const lineEdge =
+    lineApplicable
+      ? calculateLineEdge(
+          bet,
+          closingLine
+        )
+      : null;
+
+  const priceClv =
+    sameLine
+      ? calculatePriceClvPercent(
+          bet.taken_odds,
+          closingOdds
+        )
+      : null;
+
+  let clvStatus;
+
+  if (
+    lineApplicable &&
+    !sameLine &&
+    lineEdge !== null
+  ) {
+    if (lineEdge > 0) {
+      clvStatus =
+        'positive_line';
+    } else if (lineEdge < 0) {
+      clvStatus =
+        'negative_line';
+    } else {
+      clvStatus =
+        'neutral_line';
+    }
+  } else if (priceClv !== null) {
+    if (priceClv > 0.05) {
+      clvStatus =
+        'positive';
+    } else if (priceClv < -0.05) {
+      clvStatus =
+        'negative';
+    } else {
+      clvStatus =
+        'neutral';
+    }
+  } else {
+    clvStatus =
+      'matched_no_price';
+  }
 
   const noteParts = [
-    'CLV graded by ParlayAPI',
-    `status=${status}`,
-    `game_date=${normalizedBet.game_date}`,
-    `metric_stored=${metric}`
+    'CLV calculated locally from ParlayAPI historical closing odds',
+    `source=${closing.source}`,
+    `game_date=${bet.game_date}`,
+    `market=${bet.market}`,
+    `taken_odds=${bet.taken_odds}`,
+    `closing_odds=${closingOdds ?? 'null'}`
   ];
 
-  if (rawClv !== null) {
+  if (bet.line !== null) {
     noteParts.push(
-      `raw_clv_pct=${rawClv}`
+      `taken_line=${bet.line}`
     );
   }
 
-  if (noVigClv !== null) {
+  if (closingLine !== null) {
     noteParts.push(
-      `no_vig_clv_pct=${noVigClv}`
+      `closing_line=${closingLine}`
     );
   }
 
-  const takenImplied =
-    numberOrNull(
-      providerRow.taken_implied_pct
-    );
-
-  const closingImplied =
-    numberOrNull(
-      providerRow.closing_implied_pct
-    );
-
-  const noVigClosingImplied =
-    numberOrNull(
-      providerRow.no_vig_closing_implied_pct
-    );
-
-  if (takenImplied !== null) {
+  if (lineEdge !== null) {
     noteParts.push(
-      `taken_implied_pct=${takenImplied}`
+      `line_edge=${roundMetric(lineEdge)}`
     );
   }
 
-  if (closingImplied !== null) {
+  if (priceClv !== null) {
     noteParts.push(
-      `closing_implied_pct=${closingImplied}`
+      `price_clv_pct=${roundMetric(priceClv)}`
+    );
+
+    noteParts.push(
+      'clv_percent_metric=decimal_price_ratio_same_line'
+    );
+  } else if (
+    lineApplicable &&
+    !sameLine
+  ) {
+    noteParts.push(
+      'clv_percent_metric=not_computed_when_line_changed'
     );
   }
 
-  if (noVigClosingImplied !== null) {
+  if (
+    closing.source ===
+    'consensus'
+  ) {
     noteParts.push(
-      `no_vig_closing_implied_pct=${noVigClosingImplied}`
+      `consensus_books=${closing.contributing_books || 0}`
     );
   }
 
-  const update = {
+  return {
+    closing_line:
+      closingLine,
+
+    closing_odds:
+      closingOdds !== null
+        ? String(
+            closingOdds
+          )
+        : null,
+
+    closing_book:
+      closing.bookmaker ||
+      null,
+
+    clv_percent:
+      priceClv !== null
+        ? roundMetric(
+            priceClv
+          )
+        : null,
+
     clv_status:
-      status,
+      clvStatus,
 
     clv_notes:
       noteParts.join('; ')
   };
-
-  if (closingLine !== null) {
-    update.closing_line =
-      closingLine;
-  }
-
-  if (closingOdds !== null) {
-    update.closing_odds =
-      String(closingOdds);
-  }
-
-  if (closingBook !== null) {
-    update.closing_book =
-      String(closingBook);
-  }
-
-  if (preferredClv !== null) {
-    update.clv_percent =
-      preferredClv;
-  }
-
-  return update;
 }
 
 oddsApiRouter.get(
@@ -1260,6 +2379,13 @@ oddsApiRouter.get(
           );
       }
 
+      /*
+        Raw mode is available only for debugging.
+
+        Normal SharpBet requests receive the compact slate
+        so an entire league/day can fit inside a GPT action
+        response.
+      */
       if (rawMode) {
         return res.json(result);
       }
@@ -1274,12 +2400,11 @@ oddsApiRouter.get(
 );
 
 /*
-  Historical ParlayAPI CLV endpoint.
+  Diagnostic only.
 
-  ParlayAPI expects:
-  {
-    "bets": [...]
-  }
+  ParlayAPI's /v1/clv/history endpoint is currently disabled
+  upstream. The working SharpBet tracker below does not depend
+  on this route.
 */
 oddsApiRouter.post(
   '/clv/history',
@@ -1314,14 +2439,12 @@ oddsApiRouter.post(
 );
 
 /*
-  Batch CLV grader + optional bet-log write-back.
+  Working CLV tracker.
 
-  The gateway:
-  1. derives UTC game dates when commence_time exists;
-  2. validates matching fields;
-  3. sends the documented {"bets": [...]} payload to ParlayAPI;
-  4. prefers no-vig CLV when available;
-  5. writes the result to the existing SharpBet bet log.
+  This does not depend on ParlayAPI's disabled /v1/clv/history
+  endpoint. Instead it batches historical closing-odds lookups,
+  matches each wager locally, calculates CLV, and optionally
+  writes the result into the SharpBet bet log.
 */
 oddsApiRouter.post(
   '/clv/grade-and-save',
@@ -1334,7 +2457,9 @@ oddsApiRouter.post(
           : {};
 
       const inputBets =
-        Array.isArray(body.bets)
+        Array.isArray(
+          body.bets
+        )
           ? body.bets
           : [];
 
@@ -1356,28 +2481,38 @@ oddsApiRouter.post(
       const normalizedBets =
         inputBets.map(
           (bet, index) =>
-            normalizeClvBetForProvider(
+            normalizeClvBet(
               bet,
               index
             )
         );
 
       const validations =
-        inputBets.map(
-          (bet, index) =>
-            validateClvBet(
-              bet,
-              normalizedBets[index]
+        normalizedBets.map(
+          (bet) =>
+            validateNormalizedClvBet(
+              bet
             )
         );
 
       const invalid =
         validations
-          .map((item, index) => ({
-            ...item,
-            bet_index:
-              index
-          }))
+          .map(
+            (validation, index) => ({
+              bet_index:
+                index,
+
+              bet_id:
+                normalizedBets[index]
+                  .bet_id,
+
+              missing:
+                validation.missing,
+
+              valid:
+                validation.valid
+            })
+          )
           .filter(
             (item) =>
               !item.valid
@@ -1388,6 +2523,7 @@ oddsApiRouter.post(
           error: {
             message:
               'One or more CLV bets are missing required matching fields',
+
             details: {
               invalid
             }
@@ -1396,80 +2532,218 @@ oddsApiRouter.post(
       }
 
       if (writeBack) {
-        const missingBetIds =
-          validations
-            .map(
-              (item, index) => ({
-                bet_index:
-                  index,
-                bet_id:
-                  item.bet_id
-              })
-            )
+        const missingIds =
+          normalizedBets
             .filter(
-              (item) =>
-                !item.bet_id
+              (bet) =>
+                !bet.bet_id
+            )
+            .map(
+              (bet) =>
+                bet.bet_index
             );
 
-        if (missingBetIds.length > 0) {
+        if (missingIds.length > 0) {
           return res.status(400).json({
             error: {
               message:
                 'bet_id is required for every wager when write_back=true',
+
               details: {
-                missing_bet_ids:
-                  missingBetIds
+                missing_bet_indexes:
+                  missingIds
               }
             }
           });
         }
       }
 
-      const providerPayload = {
-        bets:
+      const groups =
+        new Map();
+
+      for (
+        const bet of
           normalizedBets
-      };
+      ) {
+        const key =
+          clvGroupKey(
+            bet
+          );
 
-      const providerResult =
-        await withSpecificOddsProvider(
-          'parlayApi',
+        if (!groups.has(key)) {
+          groups.set(
+            key,
+            {
+              key,
+              sport:
+                bet.sport_key,
+              date:
+                bet.game_date,
+              market:
+                bet.market,
+              player:
+                bet.player,
+              bets: []
+            }
+          );
+        }
 
-          (provider) =>
-            provider.gradeClvHistory(
-              providerPayload
-            ),
+        groups
+          .get(key)
+          .bets
+          .push(bet);
+      }
 
+      if (
+        groups.size >
+        MAX_CLV_GROUPS_PER_REQUEST
+      ) {
+        return res.status(400).json({
+          error: {
+            message:
+              `CLV batch would require ${groups.size} historical provider calls. Split it into batches of ${MAX_CLV_GROUPS_PER_REQUEST} groups or fewer.`,
+
+            details: {
+              group_count:
+                groups.size,
+
+              max_groups:
+                MAX_CLV_GROUPS_PER_REQUEST
+            }
+          }
+        });
+      }
+
+      const groupData =
+        new Map();
+
+      const groupSummaries = [];
+
+      for (
+        const group of
+          groups.values()
+      ) {
+        const params = {
+          date:
+            group.date,
+
+          markets:
+            group.market
+        };
+
+        if (group.player) {
+          params.player =
+            group.player;
+        }
+
+        const result =
+          await withSpecificOddsProvider(
+            'parlayApi',
+
+            (provider) =>
+              provider.getClosingOdds(
+                group.sport,
+                params
+              ),
+
+            {
+              /*
+                Do not filter by bookmaker upstream.
+
+                One historical archive call can service
+                multiple sportsbooks and also allows
+                consensus fallback without spending another
+                provider request.
+              */
+              cacheKey:
+                `clv-grade:parlayApi:${group.sport}:${JSON.stringify(params)}`,
+
+              cacheTtlMs:
+                24 * 60 * 60 * 1000,
+
+              requestType:
+                'clv_grade_closing_odds'
+            }
+          );
+
+        const rows =
+          closingRowsFromData(
+            result?.data
+          );
+
+        groupData.set(
+          group.key,
           {
-            requestType:
-              'clv_grade_and_save'
+            rows,
+
+            provider:
+              result?.provider ||
+              'parlayApi',
+
+            quota:
+              result?.quota ||
+              null,
+
+            cache:
+              result?.cache || {
+                hit: false
+              }
           }
         );
 
-      const providerRows =
-        extractClvResults(
-          providerResult
-        );
+        groupSummaries.push({
+          sport:
+            group.sport,
+
+          date:
+            group.date,
+
+          market:
+            group.market,
+
+          player:
+            group.player,
+
+          bet_count:
+            group.bets.length,
+
+          source_row_count:
+            rows.length,
+
+          cache_hit:
+            Boolean(
+              result?.cache?.hit
+            ),
+
+          quota:
+            result?.quota ||
+            null
+        });
+      }
 
       const results = [];
 
       for (
-        let index = 0;
-        index < normalizedBets.length;
-        index += 1
+        const bet of
+          normalizedBets
       ) {
-        const normalizedBet =
-          normalizedBets[index];
+        const group =
+          groupData.get(
+            clvGroupKey(
+              bet
+            )
+          );
 
-        const providerRow =
-          findClvResultForIndex(
-            providerRows,
-            index
+        const chosen =
+          chooseClosingForBet(
+            group?.rows || [],
+            bet
           );
 
         const logUpdate =
-          buildClvLogUpdate(
-            providerRow,
-            normalizedBet
+          buildLocalClvUpdate(
+            bet,
+            chosen
           );
 
         let savedEntry = null;
@@ -1477,32 +2751,38 @@ oddsApiRouter.post(
         if (writeBack) {
           savedEntry =
             await updateBetLogEntry(
-              validations[index].bet_id,
+              bet.bet_id,
               logUpdate
             );
         }
 
         results.push({
           bet_index:
-            index,
+            bet.bet_index,
 
           bet_id:
-            validations[index].bet_id,
-
-          game_date:
-            normalizedBet.game_date,
+            bet.bet_id,
 
           sport_key:
-            normalizedBet.sport_key,
+            bet.sport_key,
+
+          game_date:
+            bet.game_date,
 
           market:
-            normalizedBet.market,
+            bet.market,
 
           outcome:
-            normalizedBet.outcome,
+            bet.outcome,
 
-          provider_result:
-            providerRow,
+          bookmaker:
+            bet.bookmaker,
+
+          match_status:
+            chosen.status,
+
+          closing_match:
+            chosen.match,
 
           log_update:
             logUpdate,
@@ -1517,8 +2797,10 @@ oddsApiRouter.post(
 
       res.json({
         provider:
-          providerResult?.provider ||
           'parlayApi',
+
+        method:
+          'local_clv_from_historical_closing_odds',
 
         write_back:
           writeBack,
@@ -1526,19 +2808,16 @@ oddsApiRouter.post(
         submitted:
           normalizedBets.length,
 
-        provider_result_count:
-          providerRows.length,
+        group_count:
+          groups.size,
 
-        results,
+        max_groups:
+          MAX_CLV_GROUPS_PER_REQUEST,
 
-        quota:
-          providerResult?.quota ||
-          null,
+        groups:
+          groupSummaries,
 
-        cache:
-          providerResult?.cache || {
-            hit: false
-          }
+        results
       });
     } catch (error) {
       next(error);
@@ -1549,9 +2828,12 @@ oddsApiRouter.post(
 /*
   Compact CLV lookup.
 
-  This remains available for inspecting actual individual
-  historical closes even though grade-and-save is the preferred
-  tracker workflow.
+  Pulls ParlayAPI historical closing odds, then filters the
+  potentially large response inside the gateway before it is
+  returned to GPT.
+
+  If commence_time is supplied, the ParlayAPI archive date is
+  derived from the event's UTC start date.
 */
 oddsApiRouter.get(
   '/:sport/clv-lookup',
@@ -1880,6 +3162,13 @@ oddsApiRouter.get(
 
         return res.json(result);
       }
+
+      /*
+        Event IDs belong to individual providers.
+
+        If the event ID does not tell us which provider
+        created it, use the current primary provider only.
+      */
 
       const provider =
         getOddsProvider();
