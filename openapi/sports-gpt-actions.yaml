@@ -1435,6 +1435,26 @@ components:
             - string
             - number
             - "null"
+            
+        closing_odds:
+          type:
+            - string
+            - "null"
+
+        closing_book:
+          type:
+            - string
+            - "null"
+
+        clv_percent:
+          type:
+            - number
+            - "null"
+
+        clv_status:
+          type:
+            - string
+            - "null"  
 
         clv_notes:
           type:
