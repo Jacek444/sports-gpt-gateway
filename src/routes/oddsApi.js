@@ -1,6 +1,9 @@
 import express from 'express';
 import { config } from '../config.js';
-import { getOddsProviderUsageSummary } from '../storage.js';
+import {
+  getOddsProviderUsageSummary,
+  updateBetLogEntry
+} from '../storage.js';
 
 import {
   getOddsProvider,
@@ -561,6 +564,393 @@ function closingRowMatches(
   return true;
 }
 
+function numberOrNull(value) {
+  if (
+    value === undefined ||
+    value === null ||
+    value === ''
+  ) {
+    return null;
+  }
+
+  const normalized =
+    typeof value === 'string'
+      ? value.replace(/[,%$]/g, '').trim()
+      : value;
+
+  const number =
+    Number(normalized);
+
+  return Number.isFinite(number)
+    ? number
+    : null;
+}
+
+function stringOrNull(value) {
+  if (
+    value === undefined ||
+    value === null
+  ) {
+    return null;
+  }
+
+  const text =
+    String(value).trim();
+
+  return text || null;
+}
+
+function deriveClvGameDate(bet) {
+  const commenceDate =
+    utcDateFromCommenceTime(
+      bet?.commence_time
+    );
+
+  if (commenceDate) {
+    return commenceDate;
+  }
+
+  const explicitDate =
+    stringOrNull(
+      bet?.game_date ||
+      bet?.date
+    );
+
+  if (!explicitDate) {
+    return null;
+  }
+
+  return explicitDate.slice(0, 10);
+}
+
+function normalizeClvBetForProvider(bet, index) {
+  const normalized = {
+    bet_index:
+      index,
+
+    sport_key:
+      stringOrNull(
+        bet?.sport_key
+      ),
+
+    player:
+      stringOrNull(
+        bet?.player
+      ),
+
+    market:
+      stringOrNull(
+        bet?.market ||
+        bet?.market_key
+      ),
+
+    line:
+      numberOrNull(
+        bet?.line
+      ),
+
+    outcome:
+      stringOrNull(
+        bet?.outcome ||
+        bet?.outcome_key ||
+        bet?.selection
+      ),
+
+    taken_odds:
+      numberOrNull(
+        bet?.taken_odds ??
+        bet?.odds
+      ),
+
+    home_team:
+      stringOrNull(
+        bet?.home_team
+      ),
+
+    away_team:
+      stringOrNull(
+        bet?.away_team
+      ),
+
+    game_date:
+      deriveClvGameDate(
+        bet
+      )
+  };
+
+  return normalized;
+}
+
+function validateClvBet(
+  originalBet,
+  normalizedBet
+) {
+  const missing = [];
+
+  if (!normalizedBet.sport_key) {
+    missing.push('sport_key');
+  }
+
+  if (!normalizedBet.market) {
+    missing.push('market');
+  }
+
+  if (!normalizedBet.outcome) {
+    missing.push('outcome');
+  }
+
+  if (normalizedBet.taken_odds === null) {
+    missing.push('taken_odds');
+  }
+
+  if (!normalizedBet.game_date) {
+    missing.push('game_date or commence_time');
+  }
+
+  if (
+    !normalizedBet.home_team ||
+    !normalizedBet.away_team
+  ) {
+    missing.push(
+      'home_team and away_team'
+    );
+  }
+
+  return {
+    bet_id:
+      stringOrNull(
+        originalBet?.bet_id ||
+        originalBet?.id
+      ),
+
+    valid:
+      missing.length === 0,
+
+    missing
+  };
+}
+
+function extractClvResults(result) {
+  const data =
+    result?.data;
+
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if (
+    data &&
+    Array.isArray(data.results)
+  ) {
+    return data.results;
+  }
+
+  if (
+    data &&
+    Array.isArray(data.bets)
+  ) {
+    return data.bets;
+  }
+
+  if (
+    data &&
+    Array.isArray(data.data)
+  ) {
+    return data.data;
+  }
+
+  if (
+    Array.isArray(result?.results)
+  ) {
+    return result.results;
+  }
+
+  if (
+    Array.isArray(result?.bets)
+  ) {
+    return result.bets;
+  }
+
+  return [];
+}
+
+function findClvResultForIndex(
+  results,
+  index
+) {
+  const exact =
+    results.find(
+      (row) =>
+        Number(
+          row?.bet_index
+        ) === index
+    );
+
+  if (exact) {
+    return exact;
+  }
+
+  return results[index] || null;
+}
+
+function buildClvLogUpdate(
+  providerRow,
+  normalizedBet
+) {
+  if (
+    !providerRow ||
+    typeof providerRow !== 'object'
+  ) {
+    return {
+      clv_status:
+        'no_result',
+
+      clv_notes:
+        `ParlayAPI CLV grader returned no result for bet_index=${normalizedBet.bet_index}.`
+    };
+  }
+
+  const status =
+    stringOrNull(
+      providerRow.status
+    ) ||
+    'unknown';
+
+  const rawClv =
+    numberOrNull(
+      firstValue(
+        providerRow.clv_pct,
+        providerRow.raw_clv_pct,
+        providerRow.raw_clv_percent
+      )
+    );
+
+  const noVigClv =
+    numberOrNull(
+      firstValue(
+        providerRow.no_vig_clv_pct,
+        providerRow.no_vig_clv_percent
+      )
+    );
+
+  const preferredClv =
+    noVigClv !== null
+      ? noVigClv
+      : rawClv;
+
+  const closingLine =
+    firstValue(
+      providerRow.closing_line,
+      providerRow.close_line,
+      providerRow.line_at_close
+    );
+
+  const closingOdds =
+    firstValue(
+      providerRow.closing_odds,
+      providerRow.close_odds,
+      providerRow.closing_price,
+      providerRow.close_price
+    );
+
+  const closingBook =
+    firstValue(
+      providerRow.closing_book,
+      providerRow.closing_source,
+      providerRow.source,
+      providerRow.bookmaker
+    );
+
+  const metric =
+    noVigClv !== null
+      ? 'no_vig_clv_pct'
+      : rawClv !== null
+        ? 'clv_pct'
+        : 'none';
+
+  const noteParts = [
+    'CLV graded by ParlayAPI',
+    `status=${status}`,
+    `game_date=${normalizedBet.game_date}`,
+    `metric_stored=${metric}`
+  ];
+
+  if (rawClv !== null) {
+    noteParts.push(
+      `raw_clv_pct=${rawClv}`
+    );
+  }
+
+  if (noVigClv !== null) {
+    noteParts.push(
+      `no_vig_clv_pct=${noVigClv}`
+    );
+  }
+
+  const takenImplied =
+    numberOrNull(
+      providerRow.taken_implied_pct
+    );
+
+  const closingImplied =
+    numberOrNull(
+      providerRow.closing_implied_pct
+    );
+
+  const noVigClosingImplied =
+    numberOrNull(
+      providerRow.no_vig_closing_implied_pct
+    );
+
+  if (takenImplied !== null) {
+    noteParts.push(
+      `taken_implied_pct=${takenImplied}`
+    );
+  }
+
+  if (closingImplied !== null) {
+    noteParts.push(
+      `closing_implied_pct=${closingImplied}`
+    );
+  }
+
+  if (noVigClosingImplied !== null) {
+    noteParts.push(
+      `no_vig_closing_implied_pct=${noVigClosingImplied}`
+    );
+  }
+
+  const update = {
+    clv_status:
+      status,
+
+    clv_notes:
+      noteParts.join('; ')
+  };
+
+  if (closingLine !== null) {
+    update.closing_line =
+      closingLine;
+  }
+
+  if (closingOdds !== null) {
+    update.closing_odds =
+      String(closingOdds);
+  }
+
+  if (closingBook !== null) {
+    update.closing_book =
+      String(closingBook);
+  }
+
+  if (preferredClv !== null) {
+    update.clv_percent =
+      preferredClv;
+  }
+
+  return update;
+}
+
 oddsApiRouter.get(
   '/status',
   async (req, res, next) => {
@@ -700,6 +1090,9 @@ oddsApiRouter.get(
             ),
 
           {
+            order:
+              config.oddsSportsProviderOrder,
+
             cacheKey:
               `odds:auto:${sport}:${JSON.stringify(params)}`,
 
@@ -867,13 +1260,6 @@ oddsApiRouter.get(
           );
       }
 
-      /*
-        Raw mode is available only for debugging.
-
-        Normal SharpBet requests receive the compact slate
-        so an entire league/day can fit inside a GPT action
-        response.
-      */
       if (rawMode) {
         return res.json(result);
       }
@@ -888,10 +1274,12 @@ oddsApiRouter.get(
 );
 
 /*
-  Historical CLV grading route.
+  Historical ParlayAPI CLV endpoint.
 
-  This intentionally uses ParlayAPI directly so CLV grading
-  does not consume the normal SportsGameOdds live-odds workflow.
+  ParlayAPI expects:
+  {
+    "bets": [...]
+  }
 */
 oddsApiRouter.post(
   '/clv/history',
@@ -926,16 +1314,244 @@ oddsApiRouter.post(
 );
 
 /*
+  Batch CLV grader + optional bet-log write-back.
+
+  The gateway:
+  1. derives UTC game dates when commence_time exists;
+  2. validates matching fields;
+  3. sends the documented {"bets": [...]} payload to ParlayAPI;
+  4. prefers no-vig CLV when available;
+  5. writes the result to the existing SharpBet bet log.
+*/
+oddsApiRouter.post(
+  '/clv/grade-and-save',
+  async (req, res, next) => {
+    try {
+      const body =
+        req.body &&
+        typeof req.body === 'object'
+          ? req.body
+          : {};
+
+      const inputBets =
+        Array.isArray(body.bets)
+          ? body.bets
+          : [];
+
+      const writeBack =
+        body.write_back !== false;
+
+      if (
+        inputBets.length < 1 ||
+        inputBets.length > 50
+      ) {
+        return res.status(400).json({
+          error: {
+            message:
+              'bets must contain between 1 and 50 wager objects'
+          }
+        });
+      }
+
+      const normalizedBets =
+        inputBets.map(
+          (bet, index) =>
+            normalizeClvBetForProvider(
+              bet,
+              index
+            )
+        );
+
+      const validations =
+        inputBets.map(
+          (bet, index) =>
+            validateClvBet(
+              bet,
+              normalizedBets[index]
+            )
+        );
+
+      const invalid =
+        validations
+          .map((item, index) => ({
+            ...item,
+            bet_index:
+              index
+          }))
+          .filter(
+            (item) =>
+              !item.valid
+          );
+
+      if (invalid.length > 0) {
+        return res.status(400).json({
+          error: {
+            message:
+              'One or more CLV bets are missing required matching fields',
+            details: {
+              invalid
+            }
+          }
+        });
+      }
+
+      if (writeBack) {
+        const missingBetIds =
+          validations
+            .map(
+              (item, index) => ({
+                bet_index:
+                  index,
+                bet_id:
+                  item.bet_id
+              })
+            )
+            .filter(
+              (item) =>
+                !item.bet_id
+            );
+
+        if (missingBetIds.length > 0) {
+          return res.status(400).json({
+            error: {
+              message:
+                'bet_id is required for every wager when write_back=true',
+              details: {
+                missing_bet_ids:
+                  missingBetIds
+              }
+            }
+          });
+        }
+      }
+
+      const providerPayload = {
+        bets:
+          normalizedBets
+      };
+
+      const providerResult =
+        await withSpecificOddsProvider(
+          'parlayApi',
+
+          (provider) =>
+            provider.gradeClvHistory(
+              providerPayload
+            ),
+
+          {
+            requestType:
+              'clv_grade_and_save'
+          }
+        );
+
+      const providerRows =
+        extractClvResults(
+          providerResult
+        );
+
+      const results = [];
+
+      for (
+        let index = 0;
+        index < normalizedBets.length;
+        index += 1
+      ) {
+        const normalizedBet =
+          normalizedBets[index];
+
+        const providerRow =
+          findClvResultForIndex(
+            providerRows,
+            index
+          );
+
+        const logUpdate =
+          buildClvLogUpdate(
+            providerRow,
+            normalizedBet
+          );
+
+        let savedEntry = null;
+
+        if (writeBack) {
+          savedEntry =
+            await updateBetLogEntry(
+              validations[index].bet_id,
+              logUpdate
+            );
+        }
+
+        results.push({
+          bet_index:
+            index,
+
+          bet_id:
+            validations[index].bet_id,
+
+          game_date:
+            normalizedBet.game_date,
+
+          sport_key:
+            normalizedBet.sport_key,
+
+          market:
+            normalizedBet.market,
+
+          outcome:
+            normalizedBet.outcome,
+
+          provider_result:
+            providerRow,
+
+          log_update:
+            logUpdate,
+
+          saved:
+            writeBack,
+
+          saved_entry:
+            savedEntry
+        });
+      }
+
+      res.json({
+        provider:
+          providerResult?.provider ||
+          'parlayApi',
+
+        write_back:
+          writeBack,
+
+        submitted:
+          normalizedBets.length,
+
+        provider_result_count:
+          providerRows.length,
+
+        results,
+
+        quota:
+          providerResult?.quota ||
+          null,
+
+        cache:
+          providerResult?.cache || {
+            hit: false
+          }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/*
   Compact CLV lookup.
 
-  Pulls ParlayAPI historical closing odds, then filters the
-  potentially large response inside the gateway before it is
-  returned to GPT.
-
-  If commence_time is supplied, the ParlayAPI archive date is
-  derived from the event's UTC start date. This avoids date
-  mismatches for late U.S. games that occur on the following
-  calendar date in UTC.
+  This remains available for inspecting actual individual
+  historical closes even though grade-and-save is the preferred
+  tracker workflow.
 */
 oddsApiRouter.get(
   '/:sport/clv-lookup',
@@ -957,13 +1573,6 @@ oddsApiRouter.get(
           commenceTime
         );
 
-      /*
-        Prefer commence_time because ParlayAPI's historical
-        archive may use the UTC event date.
-
-        Fall back to an explicitly supplied date for older
-        bets that do not yet have commence_time stored.
-      */
       const date =
         derivedDate ||
         suppliedDate;
@@ -1067,11 +1676,6 @@ oddsApiRouter.get(
             cacheKey:
               `clv-lookup:parlayApi:${sport}:${JSON.stringify(params)}`,
 
-            /*
-              Historical closes do not change once captured.
-              A long cache keeps repeated CLV analysis from
-              repeatedly consuming ParlayAPI credits.
-            */
             cacheTtlMs:
               6 * 60 * 60 * 1000,
 
@@ -1172,7 +1776,7 @@ oddsApiRouter.get(
 );
 
 /*
-  ParlayAPI historical closing-line endpoint.
+  Raw ParlayAPI historical closing-line endpoint.
 */
 oddsApiRouter.get(
   '/:sport/closing-odds',
@@ -1276,13 +1880,6 @@ oddsApiRouter.get(
 
         return res.json(result);
       }
-
-      /*
-        Event IDs belong to individual providers.
-
-        If the event ID does not tell us which provider
-        created it, use the current primary provider only.
-      */
 
       const provider =
         getOddsProvider();
