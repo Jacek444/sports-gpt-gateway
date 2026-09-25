@@ -2,14 +2,15 @@ openapi: 3.1.0
 
 info:
   title: SharpBet Sports GPT Gateway
-  version: 2.2.0
+  version: 2.3.0
   description: >
     Unified SharpBet sports data gateway for NBA, NFL, NCAAM, NCAAF, MLB,
     and NHL. Uses the SharpBet odds-provider chain with SportsGameOdds,
     ParlayAPI, and The Odds API, with optional OddsApiIo provider support.
     Includes odds, scores, events, event-specific odds, provider status,
     persistent provider usage history, paginated betting logs,
-    recommendation snapshots, CLV tracking, and postmortems.
+    recommendation snapshots, structured handicap tags, CLV tracking,
+    event/market identifiers, and postmortems.
 
 servers:
   - url: https://sports-gpt-gateway.onrender.com
@@ -1336,6 +1337,67 @@ components:
         sportsbook:
           type: string
 
+        gateway_event_id:
+          type:
+            - string
+            - "null"
+          description: >
+            Stable SharpBet gateway event identifier used to re-query
+            the same event for CLV and market tracking.
+
+        provider_event_id:
+          type:
+            - string
+            - "null"
+          description: >
+            Native upstream odds-provider event identifier when available.
+
+        sport_key:
+          type:
+            - string
+            - "null"
+          description: >
+            Normalized odds sport key such as americanfootball_nfl,
+            basketball_nba, baseball_mlb, or icehockey_nhl.
+
+        market_key:
+          type:
+            - string
+            - "null"
+          description: >
+            Normalized odds-market key such as h2h, spreads, totals,
+            player_points, or other provider-supported market.
+
+        outcome_key:
+          type:
+            - string
+            - "null"
+          description: >
+            Normalized identifier for the exact team, player, side,
+            over/under, or market outcome being wagered.
+
+        bookmaker_key:
+          type:
+            - string
+            - "null"
+          description: >
+            Normalized sportsbook or bookmaker identifier when available.
+
+        odds_provider:
+          type:
+            - string
+            - "null"
+          description: >
+            Odds provider that supplied the original market or event data.
+
+        commence_time:
+          type:
+            - string
+            - "null"
+          format: date-time
+          description: >
+            Scheduled event start time used for close-price timing and matching.
+
         stake_usd:
           type:
             - number
@@ -1486,6 +1548,47 @@ components:
     BetLogEntryUpdate:
       type: object
       properties:
+        gateway_event_id:
+          type:
+            - string
+            - "null"
+
+        provider_event_id:
+          type:
+            - string
+            - "null"
+
+        sport_key:
+          type:
+            - string
+            - "null"
+
+        market_key:
+          type:
+            - string
+            - "null"
+
+        outcome_key:
+          type:
+            - string
+            - "null"
+
+        bookmaker_key:
+          type:
+            - string
+            - "null"
+
+        odds_provider:
+          type:
+            - string
+            - "null"
+
+        commence_time:
+          type:
+            - string
+            - "null"
+          format: date-time
+
         closing_line:
           type:
             - string
