@@ -202,38 +202,80 @@ export async function updateBetLogEntry(id, input) {
 
   const updates = {};
 
+  if (input.gateway_event_id !== undefined) {
+    updates.gateway_event_id =
+      String(input.gateway_event_id ?? '').trim() || null;
+  }
+
+  if (input.provider_event_id !== undefined) {
+    updates.provider_event_id =
+      String(input.provider_event_id ?? '').trim() || null;
+  }
+
+  if (input.sport_key !== undefined) {
+    updates.sport_key =
+      String(input.sport_key ?? '').trim() || null;
+  }
+
+  if (input.market_key !== undefined) {
+    updates.market_key =
+      String(input.market_key ?? '').trim() || null;
+  }
+
+  if (input.outcome_key !== undefined) {
+    updates.outcome_key =
+      String(input.outcome_key ?? '').trim() || null;
+  }
+
+  if (input.bookmaker_key !== undefined) {
+    updates.bookmaker_key =
+      String(input.bookmaker_key ?? '').trim() || null;
+  }
+
+  if (input.odds_provider !== undefined) {
+    updates.odds_provider =
+      String(input.odds_provider ?? '').trim() || null;
+  }
+
+  if (input.commence_time !== undefined) {
+    updates.commence_time =
+      String(input.commence_time ?? '').trim() || null;
+  }
+
   if (input.closing_line !== undefined) {
     updates.closing_line = input.closing_line ?? null;
   }
+
   if (input.closing_odds !== undefined) {
-  updates.closing_odds =
-    String(input.closing_odds ?? '').trim() || null;
-}
+    updates.closing_odds =
+      String(input.closing_odds ?? '').trim() || null;
+  }
 
-if (input.closing_book !== undefined) {
-  updates.closing_book =
-    String(input.closing_book ?? '').trim() || null;
-}
+  if (input.closing_book !== undefined) {
+    updates.closing_book =
+      String(input.closing_book ?? '').trim() || null;
+  }
 
-if (input.clv_percent !== undefined) {
-  updates.clv_percent = normalizeNumber(
-    input.clv_percent,
-    'clv_percent'
-  );
-}
+  if (input.clv_percent !== undefined) {
+    updates.clv_percent = normalizeNumber(
+      input.clv_percent,
+      'clv_percent'
+    );
+  }
 
-if (input.clv_status !== undefined) {
-  updates.clv_status =
-    String(input.clv_status ?? '').trim() || null;
-}
-
+  if (input.clv_status !== undefined) {
+    updates.clv_status =
+      String(input.clv_status ?? '').trim() || null;
+  }
 
   if (input.clv_notes !== undefined) {
-    updates.clv_notes = String(input.clv_notes ?? '').trim() || null;
+    updates.clv_notes =
+      String(input.clv_notes ?? '').trim() || null;
   }
 
   if (input.result !== undefined) {
-    updates.result = String(input.result ?? '').trim() || null;
+    updates.result =
+      String(input.result ?? '').trim() || null;
   }
 
   if (input.payout_usd !== undefined) {
@@ -245,7 +287,8 @@ if (input.clv_status !== undefined) {
   }
 
   if (input.postmortem !== undefined) {
-    updates.postmortem = String(input.postmortem ?? '').trim() || null;
+    updates.postmortem =
+      String(input.postmortem ?? '').trim() || null;
   }
 
   if (input.ev_percent !== undefined) {
@@ -267,7 +310,8 @@ if (input.clv_status !== undefined) {
   }
 
   if (input.reason !== undefined) {
-    updates.reason = String(input.reason ?? '').trim() || null;
+    updates.reason =
+      String(input.reason ?? '').trim() || null;
   }
 
   if (Object.keys(updates).length === 0) {
@@ -287,7 +331,7 @@ if (input.clv_status !== undefined) {
   }
 
   return data;
-}
+} 
 
 export async function deleteBetLogEntry(id) {
   const normalizedId = normalizeString(id, 'id');
