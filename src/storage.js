@@ -123,6 +123,31 @@ export async function addBetLogEntry(input) {
     line: input.line ?? null,
     odds: normalizeString(input.odds, 'odds'),
     sportsbook: normalizeString(input.sportsbook, 'sportsbook'),
+
+    gateway_event_id:
+      String(input.gateway_event_id ?? '').trim() || null,
+
+    provider_event_id:
+      String(input.provider_event_id ?? '').trim() || null,
+
+    sport_key:
+      String(input.sport_key ?? '').trim() || null,
+
+    market_key:
+      String(input.market_key ?? '').trim() || null,
+
+    outcome_key:
+      String(input.outcome_key ?? '').trim() || null,
+
+    bookmaker_key:
+      String(input.bookmaker_key ?? '').trim() || null,
+
+    odds_provider:
+      String(input.odds_provider ?? '').trim() || null,
+
+    commence_time:
+      String(input.commence_time ?? '').trim() || null,
+
     stake_usd: normalizeNumber(input.stake_usd, 'stake_usd', { minimum: 0 }),
     units: normalizeNumber(input.units, 'units', { minimum: 0 }),
     is_bonus_bet: normalizeBoolean(input.is_bonus_bet),
@@ -130,32 +155,32 @@ export async function addBetLogEntry(input) {
     ev_percent: normalizeNumber(input.ev_percent, 'ev_percent'),
     fair_odds: input.fair_odds ?? null,
     kelly_percent: normalizeNumber(input.kelly_percent, 'kelly_percent'),
- reason: String(input.reason ?? '').trim() || null,
+    reason: String(input.reason ?? '').trim() || null,
 
-confidence: String(input.confidence ?? '').trim() || null,
-primary_script: String(input.primary_script ?? '').trim() || null,
-failure_script: String(input.failure_script ?? '').trim() || null,
-supporting_evidence:
-  String(input.supporting_evidence ?? '').trim() || null,
-contradicting_evidence:
-  String(input.contradicting_evidence ?? '').trim() || null,
-market_reason: String(input.market_reason ?? '').trim() || null,
-handicap_tags: Array.isArray(input.handicap_tags)
-  ? input.handicap_tags
-      .map((value) => String(value).trim())
-      .filter(Boolean)
-  : null,
+    confidence: String(input.confidence ?? '').trim() || null,
+    primary_script: String(input.primary_script ?? '').trim() || null,
+    failure_script: String(input.failure_script ?? '').trim() || null,
+    supporting_evidence:
+      String(input.supporting_evidence ?? '').trim() || null,
+    contradicting_evidence:
+      String(input.contradicting_evidence ?? '').trim() || null,
+    market_reason: String(input.market_reason ?? '').trim() || null,
+    handicap_tags: Array.isArray(input.handicap_tags)
+      ? input.handicap_tags
+          .map((value) => String(value).trim())
+          .filter(Boolean)
+      : null,
 
-result: String(input.result ?? '').trim() || null,
-payout_usd: normalizeNumber(input.payout_usd, 'payout_usd', { minimum: 0 }),
-closing_line: input.closing_line ?? null,
-closing_odds: String(input.closing_odds ?? '').trim() || null,
-closing_book: String(input.closing_book ?? '').trim() || null,
-clv_percent: normalizeNumber(input.clv_percent, 'clv_percent'),
-clv_status: String(input.clv_status ?? '').trim() || null,
-clv_notes: String(input.clv_notes ?? '').trim() || null,
-postmortem: String(input.postmortem ?? '').trim() || null,
-created_at: new Date().toISOString()
+    result: String(input.result ?? '').trim() || null,
+    payout_usd: normalizeNumber(input.payout_usd, 'payout_usd', { minimum: 0 }),
+    closing_line: input.closing_line ?? null,
+    closing_odds: String(input.closing_odds ?? '').trim() || null,
+    closing_book: String(input.closing_book ?? '').trim() || null,
+    clv_percent: normalizeNumber(input.clv_percent, 'clv_percent'),
+    clv_status: String(input.clv_status ?? '').trim() || null,
+    clv_notes: String(input.clv_notes ?? '').trim() || null,
+    postmortem: String(input.postmortem ?? '').trim() || null,
+    created_at: new Date().toISOString()
   };
 
   const { data, error } = await supabase
