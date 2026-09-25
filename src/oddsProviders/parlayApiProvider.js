@@ -131,5 +131,13 @@ export const parlayApiProvider = {
       `/v1/sports/${sport}/events/${eventId}/odds`,
       params
     );
+  },
+
+  getClosingOdds(sport, params = {}) {
+    return call(
+      `/v1/historical/sports/${sport}/closing-odds`,
+      params
+    );
   }
 };
+
