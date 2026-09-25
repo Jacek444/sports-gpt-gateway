@@ -717,12 +717,9 @@ paths:
     post:
       operationId: gradeAndSaveClv
       summary: Grade logged bets for CLV from historical closing odds and optionally save the results
-      description: Calculates CLV locally from ParlayAPI historical closing odds instead of relying on
-        ParlayAPI's disabled CLV-history grader. Bets are grouped by sport, UTC archive date, market,
-        and optional player so one historical request can grade multiple wagers. The gateway prefers an
-        exact sportsbook close and falls back to a cross-book consensus when that sportsbook is unavailable.
-        Same-line price CLV is stored in clv_percent; when the closing line differs, the line movement
-        is stored in clv_notes and clv_percent is left null rather than inventing a percentage.
+      description: Grades up to 50 logged bets using ParlayAPI historical closing odds, matches the correct
+        event and wager side, calculates local CLV, and can write closing_line, closing_odds, closing_book,
+        clv_percent, clv_status, and clv_notes back to the bet log.
       requestBody:
         required: true
         content:
