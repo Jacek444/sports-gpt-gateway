@@ -527,6 +527,47 @@ oddsApiRouter.get(
 );
 
 oddsApiRouter.get(
+  '/:sport/closing-odds',
+  async (req, res, next) => {
+    try {
+      const sport =
+        req.params.sport;
+
+      const params =
+        copyQueryWithoutProvider(
+          req.query
+        );
+
+      const result =
+        await withSpecificOddsProvider(
+          'parlayApi',
+
+          (provider) =>
+            provider.getClosingOdds(
+              sport,
+              params
+            ),
+
+          {
+            cacheKey:
+              `closing-odds:parlayApi:${sport}:${JSON.stringify(params)}`,
+
+            cacheTtlMs:
+              5 * 60 * 1000,
+
+            requestType:
+              'closing_odds'
+          }
+        );
+
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+oddsApiRouter.get(
   '/:sport/events/:eventId/odds',
   async (req, res, next) => {
     try {
