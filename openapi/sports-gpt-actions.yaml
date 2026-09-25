@@ -1,8 +1,8 @@
-openapi: 3.1.0
+ openapi: 3.1.0
 
 info:
   title: SharpBet Sports GPT Gateway
-  version: 2.6.0
+  version: 2.7.0
   description: >
     Unified SharpBet sports data gateway for NBA, NFL, NCAAM, NCAAF, MLB,
     and NHL. Uses the SharpBet odds-provider chain with SportsGameOdds,
@@ -10,7 +10,7 @@ info:
     Includes odds, scores, events, event-specific odds, provider status,
     persistent provider usage history, paginated betting logs,
     recommendation snapshots, structured handicap tags, CLV tracking,
-    event/market identifiers, ParlayAPI CLV history grading, compact CLV lookup, and postmortems.
+    event/market identifiers, ParlayAPI CLV history grading, compact CLV lookup with UTC archive-date matching and normalized closing fields, and postmortems.
 
 servers:
   - url: https://sports-gpt-gateway.onrender.com
@@ -909,11 +909,22 @@ paths:
 
         - in: query
           name: date
-          required: true
+          required: false
           description: Closing-line date in YYYY-MM-DD format
           schema:
             type: string
             format: date
+
+        - in: query
+          name: commence_time
+          required: false
+          description: >
+            Scheduled event start time. When supplied, the gateway derives
+            the ParlayAPI archive date from the UTC event date and prefers
+            that over the supplied date.
+          schema:
+            type: string
+            format: date-time
 
         - in: query
           name: home_team
@@ -979,7 +990,17 @@ paths:
                     properties:
                       sport:
                         type: string
-                      date:
+                      archive_date:
+                        type: string
+                      supplied_date:
+                        type:
+                          - string
+                          - "null"
+                      commence_time:
+                        type:
+                          - string
+                          - "null"
+                      date_source:
                         type: string
                       home_team:
                         type:
@@ -1054,6 +1075,36 @@ paths:
                             - number
                             - "null"
                         price:
+                          type:
+                            - string
+                            - number
+                            - "null"
+                        home_line:
+                          type:
+                            - string
+                            - number
+                            - "null"
+                        home_price:
+                          type:
+                            - string
+                            - number
+                            - "null"
+                        away_line:
+                          type:
+                            - string
+                            - number
+                            - "null"
+                        away_price:
+                          type:
+                            - string
+                            - number
+                            - "null"
+                        draw_price:
+                          type:
+                            - string
+                            - number
+                            - "null"
+                        total:
                           type:
                             - string
                             - number
