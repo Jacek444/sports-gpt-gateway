@@ -9,7 +9,7 @@ info:
     ParlayAPI, and The Odds API, with optional OddsApiIo provider support.
     Includes odds, scores, events, event-specific odds, provider status,
     persistent provider usage history, paginated betting logs,
-    recommendation snapshots, and postmortems.
+    recommendation snapshots, CLV tracking, and postmortems.
 
 servers:
   - url: https://sports-gpt-gateway.onrender.com
@@ -63,15 +63,27 @@ paths:
                         properties:
                           sportsGameOdds:
                             type: object
+                            properties:
+                              status:
+                                type: string
                             additionalProperties: true
                           parlayApi:
                             type: object
+                            properties:
+                              status:
+                                type: string
                             additionalProperties: true
                           theOddsApi:
                             type: object
+                            properties:
+                              status:
+                                type: string
                             additionalProperties: true
                           oddsApiIo:
                             type: object
+                            properties:
+                              status:
+                                type: string
                             additionalProperties: true
                         additionalProperties: true
                     additionalProperties: true
@@ -251,10 +263,13 @@ paths:
                   away_team:
                     type: string
                   data:
-                    type:
-                      - object
-                      - "null"
-                    additionalProperties: true
+                    oneOf:
+                      - type: object
+                        properties:
+                          id:
+                            type: string
+                        additionalProperties: true
+                      - type: "null"
                 additionalProperties: true
 
         "400":
@@ -431,15 +446,27 @@ paths:
                         properties:
                           sportsGameOdds:
                             type: object
+                            properties:
+                              status:
+                                type: string
                             additionalProperties: true
                           parlayApi:
                             type: object
+                            properties:
+                              status:
+                                type: string
                             additionalProperties: true
                           theOddsApi:
                             type: object
+                            properties:
+                              status:
+                                type: string
                             additionalProperties: true
                           oddsApiIo:
                             type: object
+                            properties:
+                              status:
+                                type: string
                             additionalProperties: true
                         additionalProperties: true
                     additionalProperties: true
@@ -458,15 +485,27 @@ paths:
                         properties:
                           sportsGameOdds:
                             type: object
+                            properties:
+                              requests:
+                                type: integer
                             additionalProperties: true
                           parlayApi:
                             type: object
+                            properties:
+                              requests:
+                                type: integer
                             additionalProperties: true
                           theOddsApi:
                             type: object
+                            properties:
+                              requests:
+                                type: integer
                             additionalProperties: true
                           oddsApiIo:
                             type: object
+                            properties:
+                              requests:
+                                type: integer
                             additionalProperties: true
                         additionalProperties: true
                     additionalProperties: true
@@ -1155,15 +1194,20 @@ components:
             - NCAAF
             - MLB
             - NHL
+
         name:
           type: string
+
         season_type:
           type: string
+
         notes:
           type: string
+
       required:
         - code
         - name
+
       additionalProperties: true
 
     GatewayResponse:
@@ -1199,16 +1243,19 @@ components:
                     - string
                     - number
                     - "null"
+
                 used:
                   type:
                     - string
                     - number
                     - "null"
+
                 last:
                   type:
                     - string
                     - number
                     - "null"
+
               additionalProperties: true
 
             - type: "null"
@@ -1230,10 +1277,12 @@ components:
           properties:
             message:
               type: string
+
             status:
               type:
                 - integer
                 - "null"
+
             details:
               oneOf:
                 - type: object
@@ -1241,12 +1290,17 @@ components:
                     message:
                       type: string
                   additionalProperties: true
+
                 - type: "null"
+
           required:
             - message
+
           additionalProperties: true
+
       required:
         - error
+
       additionalProperties: true
 
     BetLogEntryInput:
@@ -1365,7 +1419,9 @@ components:
             - type: array
               items:
                 type: string
+
             - type: "null"
+
           description: >
             Structured tags describing the main handicapping mechanisms.
 
@@ -1385,7 +1441,7 @@ components:
             - number
             - "null"
 
-         closing_odds:
+        closing_odds:
           type:
             - string
             - "null"
@@ -1435,7 +1491,7 @@ components:
             - string
             - number
             - "null"
-            
+
         closing_odds:
           type:
             - string
@@ -1454,7 +1510,7 @@ components:
         clv_status:
           type:
             - string
-            - "null"  
+            - "null"
 
         clv_notes:
           type:
