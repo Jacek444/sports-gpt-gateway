@@ -2,7 +2,7 @@ openapi: 3.0.3
 
 info:
   title: SharpBet Sports GPT Gateway
-  version: 2.0.0
+  version: 2.1.0
   description: >
     Unified SharpBet sports data gateway for NBA, NFL, NCAAM, NCAAF, MLB,
     and NHL. Includes odds, scores, events, event-specific odds, provider
@@ -542,87 +542,87 @@ paths:
         '502':
           $ref: '#/components/responses/UpstreamFailure'
 
- /v1/logs/bet-log:
-  get:
-    operationId: listBetLogEntries
-    tags:
-      - Betting Logs
-    summary: Get saved SharpBet betting log entries
-    description: >
-      Returns betting log entries with pagination and optional filters.
-      Use limit and offset to retrieve large histories in chunks.
-    parameters:
-      - in: query
-        name: limit
-        required: false
-        description: Maximum number of entries to return
-        schema:
-          type: integer
-          minimum: 1
-          maximum: 100
-          default: 50
+  /v1/logs/bet-log:
+    get:
+      operationId: listBetLogEntries
+      tags:
+        - Betting Logs
+      summary: Get saved SharpBet betting log entries
+      description: >
+        Returns betting log entries with pagination and optional filters.
+        Use limit and offset to retrieve large histories in chunks.
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          description: Maximum number of entries to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
 
-      - in: query
-        name: offset
-        required: false
-        description: Number of entries to skip before returning results
-        schema:
-          type: integer
-          minimum: 0
-          default: 0
+        - in: query
+          name: offset
+          required: false
+          description: Number of entries to skip before returning results
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
 
-      - in: query
-        name: start_date
-        required: false
-        description: Only return bets on or after this date
-        schema:
-          type: string
-          format: date
+        - in: query
+          name: start_date
+          required: false
+          description: Only return bets on or after this date
+          schema:
+            type: string
+            format: date
 
-      - in: query
-        name: end_date
-        required: false
-        description: Only return bets on or before this date
-        schema:
-          type: string
-          format: date
+        - in: query
+          name: end_date
+          required: false
+          description: Only return bets on or before this date
+          schema:
+            type: string
+            format: date
 
-      - in: query
-        name: sport
-        required: false
-        description: Filter by sport
-        schema:
-          type: string
+        - in: query
+          name: sport
+          required: false
+          description: Filter by sport
+          schema:
+            type: string
 
-      - in: query
-        name: result
-        required: false
-        description: Filter by result, such as win, loss, push, or pending
-        schema:
-          type: string
+        - in: query
+          name: result
+          required: false
+          description: Filter by result, such as win, loss, push, or pending
+          schema:
+            type: string
 
-    responses:
-      '200':
-        description: Betting log entries
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                data:
-                  type: array
-                  items:
-                    $ref: '#/components/schemas/BetLogEntry'
+      responses:
+        '200':
+          description: Betting log entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BetLogEntry'
 
-                pagination:
-                  type: object
-                  properties:
-                    limit:
-                      type: integer
-                    offset:
-                      type: integer
-                    returned:
-                      type: integer
+                  pagination:
+                    type: object
+                    properties:
+                      limit:
+                        type: integer
+                      offset:
+                        type: integer
+                      returned:
+                        type: integer
 
     post:
       operationId: createBetLogEntry
@@ -1011,6 +1011,51 @@ components:
         reason:
           type: string
           nullable: true
+
+        confidence:
+          type: string
+          nullable: true
+          description: >
+            SharpBet confidence label such as STRONG, SOLID,
+            SMALL EDGE, AGGRESSIVE VALUE, or PASS.
+
+        primary_script:
+          type: string
+          nullable: true
+          description: >
+            Primary expected game script supporting the wager.
+
+        failure_script:
+          type: string
+          nullable: true
+          description: >
+            Main scenario in which the handicap or market selection can fail.
+
+        supporting_evidence:
+          type: string
+          nullable: true
+          description: >
+            Strongest evidence supporting the handicap.
+
+        contradicting_evidence:
+          type: string
+          nullable: true
+          description: >
+            Strongest evidence arguing against the handicap.
+
+        market_reason:
+          type: string
+          nullable: true
+          description: >
+            Why this market was selected as the best expression of the handicap.
+
+        handicap_tags:
+          type: array
+          nullable: true
+          description: >
+            Structured tags describing the main handicapping mechanisms.
+          items:
+            type: string
 
         result:
           type: string
