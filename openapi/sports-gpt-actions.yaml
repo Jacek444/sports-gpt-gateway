@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: SharpBet Sports GPT Gateway
-  version: 2.3.0
+  version: 2.4.0
   description: >
     Unified SharpBet sports data gateway for NBA, NFL, NCAAM, NCAAF, MLB,
     and NHL. Uses the SharpBet odds-provider chain with SportsGameOdds,
@@ -773,7 +773,74 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+                
 
+    /v1/odds/{sport}/closing-odds:
+    get:
+      operationId: getClosingOdds
+      summary: Get historical closing odds from ParlayAPI
+      description: >
+        Retrieves final pregame closing prices for CLV analysis.
+        This endpoint intentionally uses ParlayAPI so closing-line
+        lookups do not consume the primary SportsGameOdds workflow.
+      parameters:
+        - in: path
+          name: sport
+          required: true
+          description: >
+            Normalized sport key such as americanfootball_nfl,
+            basketball_nba, basketball_ncaab, americanfootball_ncaaf,
+            baseball_mlb, or icehockey_nhl.
+          schema:
+            type: string
+
+        - in: query
+          name: date
+          required: false
+          description: Closing-line date in YYYY-MM-DD format
+          schema:
+            type: string
+            format: date
+
+        - in: query
+          name: markets
+          required: false
+          description: >
+            Comma-separated markets such as h2h, spreads, totals,
+            or other closing markets supported by ParlayAPI.
+          schema:
+            type: string
+
+        - in: query
+          name: bookmakers
+          required: false
+          description: >
+            Optional comma-separated sportsbook or bookmaker filter.
+          schema:
+            type: string
+
+      responses:
+        "200":
+          description: Historical closing odds
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GatewayResponse"
+
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+        "502":
+          description: ParlayAPI closing-line request failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+                
   /v1/odds/{sport}/events/{eventId}/odds:
     get:
       operationId: getOddsForEvent
