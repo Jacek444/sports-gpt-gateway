@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: SharpBet Sports GPT Gateway
-  version: 2.5.0
+  version: 2.6.0
   description: >
     Unified SharpBet sports data gateway for NBA, NFL, NCAAM, NCAAF, MLB,
     and NHL. Uses the SharpBet odds-provider chain with SportsGameOdds,
@@ -10,7 +10,7 @@ info:
     Includes odds, scores, events, event-specific odds, provider status,
     persistent provider usage history, paginated betting logs,
     recommendation snapshots, structured handicap tags, CLV tracking,
-    event/market identifiers, ParlayAPI CLV history grading, and postmortems.
+    event/market identifiers, ParlayAPI CLV history grading, compact CLV lookup, and postmortems.
 
 servers:
   - url: https://sports-gpt-gateway.onrender.com
@@ -882,6 +882,243 @@ paths:
 
         "502":
           description: ParlayAPI CLV grading request failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+
+  /v1/odds/{sport}/clv-lookup:
+    get:
+      operationId: getClvLookup
+      summary: Get a compact historical closing-line lookup for CLV analysis
+      description: >
+        Retrieves ParlayAPI historical closing odds and returns only rows
+        matching the supplied event, market, book, and optional player filters.
+        This keeps large historical responses compact for GPT use.
+      parameters:
+        - in: path
+          name: sport
+          required: true
+          description: >
+            Normalized sport key such as americanfootball_nfl,
+            basketball_nba, basketball_ncaab, americanfootball_ncaaf,
+            baseball_mlb, or icehockey_nhl.
+          schema:
+            type: string
+
+        - in: query
+          name: date
+          required: true
+          description: Closing-line date in YYYY-MM-DD format
+          schema:
+            type: string
+            format: date
+
+        - in: query
+          name: home_team
+          required: false
+          description: Home team name used to match the historical event
+          schema:
+            type: string
+
+        - in: query
+          name: away_team
+          required: false
+          description: Away team name used to match the historical event
+          schema:
+            type: string
+
+        - in: query
+          name: market
+          required: true
+          description: >
+            Market key such as h2h, spreads, totals, or a supported
+            player-prop market.
+          schema:
+            type: string
+
+        - in: query
+          name: bookmaker
+          required: false
+          description: >
+            Optional sportsbook or bookmaker filter.
+          schema:
+            type: string
+
+        - in: query
+          name: player
+          required: false
+          description: >
+            Optional player name for player-prop closing-line lookups.
+          schema:
+            type: string
+
+        - in: query
+          name: limit
+          required: false
+          description: Maximum number of matched closing rows to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+
+      responses:
+        "200":
+          description: Compact matched closing-line rows
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  provider:
+                    type: string
+                  filters:
+                    type: object
+                    properties:
+                      sport:
+                        type: string
+                      date:
+                        type: string
+                      home_team:
+                        type:
+                          - string
+                          - "null"
+                      away_team:
+                        type:
+                          - string
+                          - "null"
+                      market:
+                        type: string
+                      bookmaker:
+                        type:
+                          - string
+                          - "null"
+                      player:
+                        type:
+                          - string
+                          - "null"
+                      limit:
+                        type: integer
+                    additionalProperties: true
+                  source_row_count:
+                    type: integer
+                  matched_count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        canonical_event_id:
+                          type:
+                            - string
+                            - number
+                            - "null"
+                        home_team:
+                          type:
+                            - string
+                            - "null"
+                        away_team:
+                          type:
+                            - string
+                            - "null"
+                        commence_time:
+                          type:
+                            - string
+                            - "null"
+                        bookmaker:
+                          type:
+                            - string
+                            - "null"
+                        bookmaker_title:
+                          type:
+                            - string
+                            - "null"
+                        market_key:
+                          type:
+                            - string
+                            - "null"
+                        player:
+                          type:
+                            - string
+                            - "null"
+                        outcome:
+                          type:
+                            - string
+                            - "null"
+                        line:
+                          type:
+                            - string
+                            - number
+                            - "null"
+                        price:
+                          type:
+                            - string
+                            - number
+                            - "null"
+                        over_price:
+                          type:
+                            - string
+                            - number
+                            - "null"
+                        under_price:
+                          type:
+                            - string
+                            - number
+                            - "null"
+                        retired:
+                          type:
+                            - boolean
+                            - "null"
+                        closed_on:
+                          type:
+                            - string
+                            - "null"
+                      additionalProperties: true
+                  quota:
+                    oneOf:
+                      - type: object
+                        properties:
+                          remaining:
+                            type:
+                              - string
+                              - number
+                              - "null"
+                          used:
+                            type:
+                              - string
+                              - number
+                              - "null"
+                          last:
+                            type:
+                              - string
+                              - number
+                              - "null"
+                        additionalProperties: true
+                      - type: "null"
+                  cache:
+                    type: object
+                    properties:
+                      hit:
+                        type: boolean
+                    additionalProperties: true
+                  note:
+                    type:
+                      - string
+                      - "null"
+                additionalProperties: true
+
+        "400":
+          description: Missing or invalid CLV lookup filters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+        "502":
+          description: ParlayAPI closing-line lookup failed
           content:
             application/json:
               schema:
