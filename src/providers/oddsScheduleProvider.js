@@ -55,9 +55,10 @@ function normalizeEvent(event, provider, league) {
 }
 
 export class OddsScheduleProvider extends BaseProvider {
-  constructor(fetchEvents = loadEvents) {
+  constructor(fetchEvents = loadEvents, now = Date.now) {
     super('odds');
     this.fetchEvents = fetchEvents;
+    this.now = now;
   }
 
   async listGames({ league, date, season, week, team: teamFilter, status, cursor, limit = 25 }) {
@@ -66,7 +67,9 @@ export class OddsScheduleProvider extends BaseProvider {
     if (season !== undefined || week !== undefined || cursor) {
       throw new HttpError(400, 'Odds-based event discovery does not support season, week, or cursor filters. Use a date, or sharpbet_get_events with an explicit time window.');
     }
-    const params = { dateFormat: 'iso' };
+    // An unbounded SportsGameOdds request starts with archived events.
+    const today = new Date(this.now()).toISOString().slice(0, 10);
+    const params = { dateFormat: 'iso', commenceTimeFrom: `${today}T00:00:00.000Z` };
     if (date) {
       const start = Date.parse(`${date}T00:00:00Z`);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(start) || new Date(start).toISOString().slice(0, 10) !== date) {
@@ -82,11 +85,14 @@ export class OddsScheduleProvider extends BaseProvider {
     if (!Array.isArray(raw) || !result.provider || result.provider === 'mock') {
       throw new HttpError(502, 'Odds provider returned an invalid or mock event response.');
     }
-    let games = raw.map((event) => normalizeEvent(event, result.provider, league));
-    if (date) games = games.filter((game) => {
-      const time = Date.parse(game.start_time);
-      return time >= Date.parse(params.commenceTimeFrom) && time <= Date.parse(params.commenceTimeTo);
-    });
+    // Filter archived rows before normalizing: special historical events can
+    // omit team names and must not break current event discovery.
+    let games = raw.filter((event) => {
+      const time = Date.parse(event.status?.startsAt || event.commence_time || event.commenceTime || event.start_time);
+      if (!Number.isFinite(time)) return true; // Keep malformed rows for validation.
+      return time >= Date.parse(params.commenceTimeFrom)
+        && (!params.commenceTimeTo || time <= Date.parse(params.commenceTimeTo));
+    }).map((event) => normalizeEvent(event, result.provider, league));
     if (teamFilter) {
       const term = String(teamFilter).toLowerCase();
       games = games.filter((game) => [game.home_team, game.away_team].some((entry) =>
@@ -98,6 +104,7 @@ export class OddsScheduleProvider extends BaseProvider {
       meta: {
         per_page: count, returned: Math.min(games.length, count),
         coverage: 'betting_events', complete_schedule: false, date_timezone: 'UTC',
+        starts_at_or_after: params.commenceTimeFrom,
         truncated: games.length > count || Boolean(result.nextCursor || result.data?.nextCursor || result.meta?.next_cursor),
         note: 'Only events covered by the odds provider are included. Empty results do not prove that no games exist. For a local calendar day, use sharpbet_get_events with explicit UTC start/end timestamps.'
       },
