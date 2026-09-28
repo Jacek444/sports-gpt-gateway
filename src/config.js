@@ -22,7 +22,8 @@ function envNumber(name, fallback) {
 export const config = {
   port: Number(env('PORT', DEFAULT_PORT)),
   defaultProvider: env('DEFAULT_PROVIDER', 'balldontlie').toLowerCase(),
-  mockWhenUnconfigured: envBool('MOCK_WHEN_UNCONFIGURED', true),
+  mockWhenUnconfigured: envBool('MOCK_WHEN_UNCONFIGURED', false),
+  allowMockData: env('NODE_ENV') !== 'production' && envBool('ALLOW_MOCK_DATA', false),
 
   oddsRequestTimeoutMs: envNumber('ODDS_REQUEST_TIMEOUT_MS', 12000),
 
