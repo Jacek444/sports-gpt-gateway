@@ -61,11 +61,7 @@ function normalizeBoolean(value) {
 }
 
 function normalizeNullableBoolean(value) {
-  if (
-    value === undefined ||
-    value === null ||
-    value === ''
-  ) {
+  if (value === undefined || value === null || value === '') {
     return null;
   }
 
@@ -99,6 +95,38 @@ function createBetId() {
 
 function createPostmortemId() {
   return `postmortem_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createPromoId() {
+  return `promo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function normalizeStringArray(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => String(item).trim())
+    .filter(Boolean);
+}
+
+function normalizePromoStatus(value, { allowNull = false } = {}) {
+  if ((value === undefined || value === null || value === '') && allowNull) {
+    return null;
+  }
+
+  const normalized = String(value ?? 'NEW').trim().toUpperCase();
+  const allowed = ['NEW', 'AVAILABLE', 'USED', 'EXPIRED', 'VOID'];
+
+  if (!allowed.includes(normalized)) {
+    throw new HttpError(
+      400,
+      `Field "status" must be one of: ${allowed.join(', ')}`
+    );
+  }
+
+  return normalized;
 }
 
 export async function listBetLogEntries({
@@ -181,54 +209,23 @@ export async function addBetLogEntry(input) {
     commence_time:
       String(input.commence_time ?? '').trim() || null,
 
-    stake_usd: normalizeNumber(
-      input.stake_usd,
-      'stake_usd',
-      { minimum: 0 }
-    ),
-
-    units: normalizeNumber(
-      input.units,
-      'units',
-      { minimum: 0 }
-    ),
-
+    stake_usd: normalizeNumber(input.stake_usd, 'stake_usd', { minimum: 0 }),
+    units: normalizeNumber(input.units, 'units', { minimum: 0 }),
     is_bonus_bet: normalizeBoolean(input.is_bonus_bet),
     boost_used: normalizeBoolean(input.boost_used),
-
-    ev_percent: normalizeNumber(
-      input.ev_percent,
-      'ev_percent'
-    ),
-
+    ev_percent: normalizeNumber(input.ev_percent, 'ev_percent'),
     fair_odds: input.fair_odds ?? null,
+    kelly_percent: normalizeNumber(input.kelly_percent, 'kelly_percent'),
+    reason: String(input.reason ?? '').trim() || null,
 
-    kelly_percent: normalizeNumber(
-      input.kelly_percent,
-      'kelly_percent'
-    ),
-
-    reason:
-      String(input.reason ?? '').trim() || null,
-
-    confidence:
-      String(input.confidence ?? '').trim() || null,
-
-    primary_script:
-      String(input.primary_script ?? '').trim() || null,
-
-    failure_script:
-      String(input.failure_script ?? '').trim() || null,
-
+    confidence: String(input.confidence ?? '').trim() || null,
+    primary_script: String(input.primary_script ?? '').trim() || null,
+    failure_script: String(input.failure_script ?? '').trim() || null,
     supporting_evidence:
       String(input.supporting_evidence ?? '').trim() || null,
-
     contradicting_evidence:
       String(input.contradicting_evidence ?? '').trim() || null,
-
-    market_reason:
-      String(input.market_reason ?? '').trim() || null,
-
+    market_reason: String(input.market_reason ?? '').trim() || null,
     handicap_tags: Array.isArray(input.handicap_tags)
       ? input.handicap_tags
           .map((value) => String(value).trim())
@@ -237,90 +234,49 @@ export async function addBetLogEntry(input) {
 
     predicted_game_script:
       String(input.predicted_game_script ?? '').trim() || null,
-
     game_read_confidence:
       String(input.game_read_confidence ?? '').trim() || null,
-
     market_fit_confidence:
       String(input.market_fit_confidence ?? '').trim() || null,
-
     price_confidence:
       String(input.price_confidence ?? '').trim() || null,
-
     recommended_line:
       String(input.recommended_line ?? '').trim() || null,
-
     recommended_price:
       String(input.recommended_price ?? '').trim() || null,
-
     worst_acceptable_line:
       String(input.worst_acceptable_line ?? '').trim() || null,
-
     worst_acceptable_price:
       String(input.worst_acceptable_price ?? '').trim() || null,
-
     execution_status:
       String(input.execution_status ?? '').trim() || null,
-
     pre_bet_information_risk:
       String(input.pre_bet_information_risk ?? '').trim() || null,
-
     existing_portfolio_exposure:
       String(input.existing_portfolio_exposure ?? '').trim() || null,
-
     correlation_notes:
       String(input.correlation_notes ?? '').trim() || null,
-
     actual_game_script:
       String(input.actual_game_script ?? '').trim() || null,
-
     handicap_correct:
       normalizeNullableBoolean(input.handicap_correct),
-
     market_selection_correct:
       normalizeNullableBoolean(input.market_selection_correct),
-
     key_assumption_that_failed:
       String(input.key_assumption_that_failed ?? '').trim() || null,
-
     unexpected_event:
       String(input.unexpected_event ?? '').trim() || null,
 
-    result:
-      String(input.result ?? '').trim() || null,
-
-    payout_usd: normalizeNumber(
-      input.payout_usd,
-      'payout_usd',
-      { minimum: 0 }
-    ),
-
-    closing_line:
-      input.closing_line ?? null,
-
-    closing_odds:
-      String(input.closing_odds ?? '').trim() || null,
-
-    closing_book:
-      String(input.closing_book ?? '').trim() || null,
-
-    clv_percent:
-      normalizeNumber(
-        input.clv_percent,
-        'clv_percent'
-      ),
-
-    clv_status:
-      String(input.clv_status ?? '').trim() || null,
-
-    clv_notes:
-      String(input.clv_notes ?? '').trim() || null,
-
-    postmortem:
-      String(input.postmortem ?? '').trim() || null,
-
-    created_at:
-      new Date().toISOString()
+    result: String(input.result ?? '').trim() || null,
+    payout_usd: normalizeNumber(input.payout_usd, 'payout_usd', { minimum: 0 }),
+    closing_line: input.closing_line ?? null,
+    closing_odds: String(input.closing_odds ?? '').trim() || null,
+    closing_book: String(input.closing_book ?? '').trim() || null,
+    clv_percent: normalizeNumber(input.clv_percent, 'clv_percent'),
+    clv_status: String(input.clv_status ?? '').trim() || null,
+    clv_notes: String(input.clv_notes ?? '').trim() || null,
+    postmortem: String(input.postmortem ?? '').trim() || null,
+    created_at: new Date().toISOString()
   };
 
   const { data, error } = await supabase
@@ -413,12 +369,11 @@ export async function updateBetLogEntry(id, input) {
   }
 
   if (input.handicap_tags !== undefined) {
-    updates.handicap_tags =
-      Array.isArray(input.handicap_tags)
-        ? input.handicap_tags
-            .map((value) => String(value).trim())
-            .filter(Boolean)
-        : null;
+    updates.handicap_tags = Array.isArray(input.handicap_tags)
+      ? input.handicap_tags
+          .map((value) => String(value).trim())
+          .filter(Boolean)
+      : null;
   }
 
   if (input.predicted_game_script !== undefined) {
@@ -507,8 +462,7 @@ export async function updateBetLogEntry(id, input) {
   }
 
   if (input.closing_line !== undefined) {
-    updates.closing_line =
-      input.closing_line ?? null;
+    updates.closing_line = input.closing_line ?? null;
   }
 
   if (input.closing_odds !== undefined) {
@@ -522,11 +476,10 @@ export async function updateBetLogEntry(id, input) {
   }
 
   if (input.clv_percent !== undefined) {
-    updates.clv_percent =
-      normalizeNumber(
-        input.clv_percent,
-        'clv_percent'
-      );
+    updates.clv_percent = normalizeNumber(
+      input.clv_percent,
+      'clv_percent'
+    );
   }
 
   if (input.clv_status !== undefined) {
@@ -545,12 +498,11 @@ export async function updateBetLogEntry(id, input) {
   }
 
   if (input.payout_usd !== undefined) {
-    updates.payout_usd =
-      normalizeNumber(
-        input.payout_usd,
-        'payout_usd',
-        { minimum: 0 }
-      );
+    updates.payout_usd = normalizeNumber(
+      input.payout_usd,
+      'payout_usd',
+      { minimum: 0 }
+    );
   }
 
   if (input.postmortem !== undefined) {
@@ -559,24 +511,21 @@ export async function updateBetLogEntry(id, input) {
   }
 
   if (input.ev_percent !== undefined) {
-    updates.ev_percent =
-      normalizeNumber(
-        input.ev_percent,
-        'ev_percent'
-      );
+    updates.ev_percent = normalizeNumber(
+      input.ev_percent,
+      'ev_percent'
+    );
   }
 
   if (input.fair_odds !== undefined) {
-    updates.fair_odds =
-      input.fair_odds ?? null;
+    updates.fair_odds = input.fair_odds ?? null;
   }
 
   if (input.kelly_percent !== undefined) {
-    updates.kelly_percent =
-      normalizeNumber(
-        input.kelly_percent,
-        'kelly_percent'
-      );
+    updates.kelly_percent = normalizeNumber(
+      input.kelly_percent,
+      'kelly_percent'
+    );
   }
 
   if (input.reason !== undefined) {
@@ -585,10 +534,7 @@ export async function updateBetLogEntry(id, input) {
   }
 
   if (Object.keys(updates).length === 0) {
-    throw new HttpError(
-      400,
-      'No valid fields provided to update'
-    );
+    throw new HttpError(400, 'No valid fields provided to update');
   }
 
   const { data, error } = await supabase
@@ -599,69 +545,39 @@ export async function updateBetLogEntry(id, input) {
     .single();
 
   if (error) {
-    console.error(
-      'Supabase updateBetLogEntry error:',
-      error
-    );
-
-    throw new HttpError(
-      500,
-      'Failed to update bet log entry'
-    );
+    console.error('Supabase updateBetLogEntry error:', error);
+    throw new HttpError(500, 'Failed to update bet log entry');
   }
 
   return data;
-}
+} 
 
 export async function deleteBetLogEntry(id) {
-  const normalizedId =
-    normalizeString(id, 'id');
+  const normalizedId = normalizeString(id, 'id');
 
-  const { data, error } =
-    await supabase
-      .from('bet_log')
-      .delete()
-      .eq('id', normalizedId)
-      .select('id');
+  const { data, error } = await supabase
+    .from('bet_log')
+    .delete()
+    .eq('id', normalizedId)
+    .select('id');
 
   if (error) {
-    console.error(
-      'Supabase deleteBetLogEntry error:',
-      error
-    );
-
-    throw new HttpError(
-      500,
-      'Failed to delete bet log entry'
-    );
+    console.error('Supabase deleteBetLogEntry error:', error);
+    throw new HttpError(500, 'Failed to delete bet log entry');
   }
 
-  return (
-    Array.isArray(data) &&
-    data.length > 0
-  );
+  return Array.isArray(data) && data.length > 0;
 }
 
 export async function listPostmortems() {
-  const { data, error } =
-    await supabase
-      .from('postmortems')
-      .select('*')
-      .order(
-        'created_at',
-        { ascending: false }
-      );
+  const { data, error } = await supabase
+    .from('postmortems')
+    .select('*')
+    .order('created_at', { ascending: false });
 
   if (error) {
-    console.error(
-      'Supabase listPostmortems error:',
-      error
-    );
-
-    throw new HttpError(
-      500,
-      'Failed to read postmortems'
-    );
+    console.error('Supabase listPostmortems error:', error);
+    throw new HttpError(500, 'Failed to read postmortems');
   }
 
   return data || [];
@@ -670,313 +586,373 @@ export async function listPostmortems() {
 export async function addPostmortem(input) {
   const entry = {
     id: createPostmortemId(),
-
-    date:
-      normalizeString(
-        input.date,
-        'date'
-      ),
-
-    summary:
-      normalizeString(
-        input.summary,
-        'summary'
-      ),
-
-    best_decisions:
-      Array.isArray(
-        input.best_decisions
-      )
-        ? input.best_decisions
-            .map(
-              (value) =>
-                String(value).trim()
-            )
-            .filter(Boolean)
-        : [],
-
-    worst_decisions:
-      Array.isArray(
-        input.worst_decisions
-      )
-        ? input.worst_decisions
-            .map(
-              (value) =>
-                String(value).trim()
-            )
-            .filter(Boolean)
-        : [],
-
-    process_notes:
-      Array.isArray(
-        input.process_notes
-      )
-        ? input.process_notes
-            .map(
-              (value) =>
-                String(value).trim()
-            )
-            .filter(Boolean)
-        : [],
-
-    adjustments:
-      Array.isArray(
-        input.adjustments
-      )
-        ? input.adjustments
-            .map(
-              (value) =>
-                String(value).trim()
-            )
-            .filter(Boolean)
-        : [],
-
-    created_at:
-      new Date().toISOString()
+    date: normalizeString(input.date, 'date'),
+    summary: normalizeString(input.summary, 'summary'),
+    best_decisions: Array.isArray(input.best_decisions)
+      ? input.best_decisions.map((value) => String(value).trim()).filter(Boolean)
+      : [],
+    worst_decisions: Array.isArray(input.worst_decisions)
+      ? input.worst_decisions.map((value) => String(value).trim()).filter(Boolean)
+      : [],
+    process_notes: Array.isArray(input.process_notes)
+      ? input.process_notes.map((value) => String(value).trim()).filter(Boolean)
+      : [],
+    adjustments: Array.isArray(input.adjustments)
+      ? input.adjustments.map((value) => String(value).trim()).filter(Boolean)
+      : [],
+    created_at: new Date().toISOString()
   };
 
-  const { data, error } =
-    await supabase
-      .from('postmortems')
-      .insert(entry)
-      .select()
-      .single();
+  const { data, error } = await supabase
+    .from('postmortems')
+    .insert(entry)
+    .select()
+    .single();
 
   if (error) {
-    console.error(
-      'Supabase addPostmortem error:',
-      error
-    );
-
-    throw new HttpError(
-      500,
-      'Failed to save postmortem'
-    );
+    console.error('Supabase addPostmortem error:', error);
+    throw new HttpError(500, 'Failed to save postmortem');
   }
 
   return data;
 }
 
-export async function updatePostmortem(
-  id,
-  input
-) {
-  const normalizedId =
-    normalizeString(id, 'id');
+export async function updatePostmortem(id, input) {
+  const normalizedId = normalizeString(id, 'id');
 
   const updates = {};
 
   if (input.date !== undefined) {
-    updates.date =
-      normalizeString(
-        input.date,
-        'date'
-      );
+    updates.date = normalizeString(input.date, 'date');
   }
 
   if (input.summary !== undefined) {
-    updates.summary =
-      normalizeString(
-        input.summary,
-        'summary'
-      );
+    updates.summary = normalizeString(input.summary, 'summary');
   }
 
-  if (
-    input.best_decisions !==
-    undefined
-  ) {
-    updates.best_decisions =
-      Array.isArray(
-        input.best_decisions
-      )
-        ? input.best_decisions
-            .map(
-              (value) =>
-                String(value).trim()
-            )
-            .filter(Boolean)
-        : [];
+  if (input.best_decisions !== undefined) {
+    updates.best_decisions = Array.isArray(input.best_decisions)
+      ? input.best_decisions
+          .map((value) => String(value).trim())
+          .filter(Boolean)
+      : [];
   }
 
-  if (
-    input.worst_decisions !==
-    undefined
-  ) {
-    updates.worst_decisions =
-      Array.isArray(
-        input.worst_decisions
-      )
-        ? input.worst_decisions
-            .map(
-              (value) =>
-                String(value).trim()
-            )
-            .filter(Boolean)
-        : [];
+  if (input.worst_decisions !== undefined) {
+    updates.worst_decisions = Array.isArray(input.worst_decisions)
+      ? input.worst_decisions
+          .map((value) => String(value).trim())
+          .filter(Boolean)
+      : [];
   }
 
-  if (
-    input.process_notes !==
-    undefined
-  ) {
-    updates.process_notes =
-      Array.isArray(
-        input.process_notes
-      )
-        ? input.process_notes
-            .map(
-              (value) =>
-                String(value).trim()
-            )
-            .filter(Boolean)
-        : [];
+  if (input.process_notes !== undefined) {
+    updates.process_notes = Array.isArray(input.process_notes)
+      ? input.process_notes
+          .map((value) => String(value).trim())
+          .filter(Boolean)
+      : [];
   }
 
-  if (
-    input.adjustments !==
-    undefined
-  ) {
-    updates.adjustments =
-      Array.isArray(
-        input.adjustments
-      )
-        ? input.adjustments
-            .map(
-              (value) =>
-                String(value).trim()
-            )
-            .filter(Boolean)
-        : [];
+  if (input.adjustments !== undefined) {
+    updates.adjustments = Array.isArray(input.adjustments)
+      ? input.adjustments
+          .map((value) => String(value).trim())
+          .filter(Boolean)
+      : [];
   }
 
-  if (
-    Object.keys(updates).length ===
-    0
-  ) {
-    throw new HttpError(
-      400,
-      'No valid fields provided to update'
-    );
+  if (Object.keys(updates).length === 0) {
+    throw new HttpError(400, 'No valid fields provided to update');
   }
 
-  const { data, error } =
-    await supabase
-      .from('postmortems')
-      .update(updates)
-      .eq('id', normalizedId)
-      .select()
-      .single();
+  const { data, error } = await supabase
+    .from('postmortems')
+    .update(updates)
+    .eq('id', normalizedId)
+    .select()
+    .single();
 
   if (error) {
-    console.error(
-      'Supabase updatePostmortem error:',
-      error
-    );
-
-    throw new HttpError(
-      500,
-      'Failed to update postmortem'
-    );
+    console.error('Supabase updatePostmortem error:', error);
+    throw new HttpError(500, 'Failed to update postmortem');
   }
 
   return data;
 }
 
 export async function deletePostmortem(id) {
-  const normalizedId =
-    normalizeString(id, 'id');
+  const normalizedId = normalizeString(id, 'id');
 
-  const { data, error } =
-    await supabase
-      .from('postmortems')
-      .delete()
-      .eq('id', normalizedId)
-      .select('id');
+  const { data, error } = await supabase
+    .from('postmortems')
+    .delete()
+    .eq('id', normalizedId)
+    .select('id');
 
   if (error) {
-    console.error(
-      'Supabase deletePostmortem error:',
-      error
-    );
+    console.error('Supabase deletePostmortem error:', error);
+    throw new HttpError(500, 'Failed to delete postmortem');
+  }
 
-    throw new HttpError(
-      500,
-      'Failed to delete postmortem'
+  return Array.isArray(data) && data.length > 0;
+}
+
+export async function listPromos({
+  limit = 100,
+  offset = 0,
+  status = null,
+  sportsbook = null,
+  promo_type = null,
+  expires_before = null,
+  expires_after = null
+} = {}) {
+  const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), 200);
+  const safeOffset = Math.max(Number(offset) || 0, 0);
+
+  let query = supabase
+    .from('promos')
+    .select('*')
+    .order('expires_at', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: false })
+    .range(safeOffset, safeOffset + safeLimit - 1);
+
+  if (status) {
+    query = query.eq('status', normalizePromoStatus(status));
+  }
+
+  if (sportsbook) {
+    query = query.ilike('sportsbook', String(sportsbook).trim());
+  }
+
+  if (promo_type) {
+    query = query.ilike('promo_type', String(promo_type).trim());
+  }
+
+  if (expires_before) {
+    query = query.lte('expires_at', String(expires_before).trim());
+  }
+
+  if (expires_after) {
+    query = query.gte('expires_at', String(expires_after).trim());
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error('Supabase listPromos error:', error);
+    throw new HttpError(500, 'Failed to read promo inventory');
+  }
+
+  return data || [];
+}
+
+export async function addPromo(input) {
+  const now = new Date().toISOString();
+  const status = normalizePromoStatus(input.status ?? 'NEW');
+
+  const entry = {
+    id: createPromoId(),
+    sportsbook: normalizeString(input.sportsbook, 'sportsbook'),
+    promo_type: normalizeString(input.promo_type, 'promo_type'),
+    promo_name: normalizeString(input.promo_name, 'promo_name'),
+    boost_percent: normalizeNumber(input.boost_percent, 'boost_percent', {
+      minimum: 0
+    }),
+    max_stake: normalizeNumber(input.max_stake, 'max_stake', {
+      minimum: 0
+    }),
+    min_odds: String(input.min_odds ?? '').trim() || null,
+    eligible_sports: normalizeStringArray(input.eligible_sports),
+    eligible_markets: normalizeStringArray(input.eligible_markets),
+    bet_type: String(input.bet_type ?? '').trim() || null,
+    minimum_legs: normalizeNumber(input.minimum_legs, 'minimum_legs', {
+      minimum: 1
+    }),
+    minimum_combined_odds:
+      String(input.minimum_combined_odds ?? '').trim() || null,
+    bonus_bet_amount: normalizeNumber(
+      input.bonus_bet_amount,
+      'bonus_bet_amount',
+      { minimum: 0 }
+    ),
+    expires_at: String(input.expires_at ?? '').trim() || null,
+    status,
+    notes: String(input.notes ?? '').trim() || null,
+    used_at:
+      String(input.used_at ?? '').trim() ||
+      (status === 'USED' ? now : null),
+    created_at: now,
+    updated_at: now
+  };
+
+  const { data, error } = await supabase
+    .from('promos')
+    .insert(entry)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Supabase addPromo error:', error);
+    throw new HttpError(500, 'Failed to save promo');
+  }
+
+  return data;
+}
+
+export async function updatePromo(id, input) {
+  const normalizedId = normalizeString(id, 'id');
+  const updates = {};
+
+  if (input.sportsbook !== undefined) {
+    updates.sportsbook = normalizeString(input.sportsbook, 'sportsbook');
+  }
+
+  if (input.promo_type !== undefined) {
+    updates.promo_type = normalizeString(input.promo_type, 'promo_type');
+  }
+
+  if (input.promo_name !== undefined) {
+    updates.promo_name = normalizeString(input.promo_name, 'promo_name');
+  }
+
+  if (input.boost_percent !== undefined) {
+    updates.boost_percent = normalizeNumber(
+      input.boost_percent,
+      'boost_percent',
+      { minimum: 0 }
     );
   }
 
-  return (
-    Array.isArray(data) &&
-    data.length > 0
-  );
-}
+  if (input.max_stake !== undefined) {
+    updates.max_stake = normalizeNumber(input.max_stake, 'max_stake', {
+      minimum: 0
+    });
+  }
 
-export async function addOddsProviderUsage(
-  input
-) {
-  const entry = {
-    provider:
-      normalizeString(
-        input.provider,
-        'provider'
-      ),
+  if (input.min_odds !== undefined) {
+    updates.min_odds = String(input.min_odds ?? '').trim() || null;
+  }
 
-    request_type:
-      normalizeString(
-        input.request_type,
-        'request_type'
-      ),
+  if (input.eligible_sports !== undefined) {
+    updates.eligible_sports = normalizeStringArray(input.eligible_sports);
+  }
 
-    success:
-      normalizeBoolean(
-        input.success
-      ),
+  if (input.eligible_markets !== undefined) {
+    updates.eligible_markets = normalizeStringArray(input.eligible_markets);
+  }
 
-    fallback_used:
-      normalizeBoolean(
-        input.fallback_used
-      ),
+  if (input.bet_type !== undefined) {
+    updates.bet_type = String(input.bet_type ?? '').trim() || null;
+  }
 
-    cache_hit:
-      normalizeBoolean(
-        input.cache_hit
-      ),
+  if (input.minimum_legs !== undefined) {
+    updates.minimum_legs = normalizeNumber(
+      input.minimum_legs,
+      'minimum_legs',
+      { minimum: 1 }
+    );
+  }
 
-    upstream_status:
-      normalizeNumber(
-        input.upstream_status,
-        'upstream_status'
-      ),
+  if (input.minimum_combined_odds !== undefined) {
+    updates.minimum_combined_odds =
+      String(input.minimum_combined_odds ?? '').trim() || null;
+  }
 
-    quota:
-      input.quota &&
-      typeof input.quota === 'object'
-        ? input.quota
-        : null,
+  if (input.bonus_bet_amount !== undefined) {
+    updates.bonus_bet_amount = normalizeNumber(
+      input.bonus_bet_amount,
+      'bonus_bet_amount',
+      { minimum: 0 }
+    );
+  }
 
-    error_message:
-      String(
-        input.error_message ?? ''
-      ).trim() || null,
+  if (input.expires_at !== undefined) {
+    updates.expires_at = String(input.expires_at ?? '').trim() || null;
+  }
 
-    created_at:
-      new Date().toISOString()
-  };
+  if (input.status !== undefined) {
+    updates.status = normalizePromoStatus(input.status);
 
-  const { data, error } =
-    await supabase
-      .from('odds_provider_usage')
-      .insert(entry)
-      .select()
-      .single();
+    if (updates.status === 'USED' && input.used_at === undefined) {
+      updates.used_at = new Date().toISOString();
+    }
+  }
+
+  if (input.notes !== undefined) {
+    updates.notes = String(input.notes ?? '').trim() || null;
+  }
+
+  if (input.used_at !== undefined) {
+    updates.used_at = String(input.used_at ?? '').trim() || null;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    throw new HttpError(400, 'No valid fields provided to update');
+  }
+
+  updates.updated_at = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from('promos')
+    .update(updates)
+    .eq('id', normalizedId)
+    .select()
+    .single();
 
   if (error) {
-    console.error(
-      'Supabase addOddsProviderUsage error:',
-      error
-    );
+    console.error('Supabase updatePromo error:', error);
+    throw new HttpError(500, 'Failed to update promo');
+  }
 
+  return data;
+}
+
+export async function deletePromo(id) {
+  const normalizedId = normalizeString(id, 'id');
+
+  const { data, error } = await supabase
+    .from('promos')
+    .delete()
+    .eq('id', normalizedId)
+    .select('id');
+
+  if (error) {
+    console.error('Supabase deletePromo error:', error);
+    throw new HttpError(500, 'Failed to delete promo');
+  }
+
+  return Array.isArray(data) && data.length > 0;
+}
+
+export async function addOddsProviderUsage(input) {
+  const entry = {
+    provider: normalizeString(input.provider, 'provider'),
+    request_type: normalizeString(input.request_type, 'request_type'),
+    success: normalizeBoolean(input.success),
+    fallback_used: normalizeBoolean(input.fallback_used),
+    cache_hit: normalizeBoolean(input.cache_hit),
+    upstream_status: normalizeNumber(
+      input.upstream_status,
+      'upstream_status'
+    ),
+    quota:
+      input.quota && typeof input.quota === 'object'
+        ? input.quota
+        : null,
+    error_message:
+      String(input.error_message ?? '').trim() || null,
+    created_at: new Date().toISOString()
+  };
+
+  const { data, error } = await supabase
+    .from('odds_provider_usage')
+    .insert(entry)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Supabase addOddsProviderUsage error:', error);
     throw new HttpError(
       500,
       'Failed to save odds provider usage'
@@ -990,38 +966,20 @@ export async function listOddsProviderUsage({
   since = null,
   limit = 1000
 } = {}) {
-  let query =
-    supabase
-      .from('odds_provider_usage')
-      .select('*')
-      .order(
-        'created_at',
-        { ascending: false }
-      )
-      .limit(
-        Math.min(
-          Number(limit) || 1000,
-          5000
-        )
-      );
+  let query = supabase
+    .from('odds_provider_usage')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(Math.min(Number(limit) || 1000, 5000));
 
   if (since) {
-    query =
-      query.gte(
-        'created_at',
-        since
-      );
+    query = query.gte('created_at', since);
   }
 
-  const { data, error } =
-    await query;
+  const { data, error } = await query;
 
   if (error) {
-    console.error(
-      'Supabase listOddsProviderUsage error:',
-      error
-    );
-
+    console.error('Supabase listOddsProviderUsage error:', error);
     throw new HttpError(
       500,
       'Failed to read odds provider usage'
@@ -1034,11 +992,10 @@ export async function listOddsProviderUsage({
 export async function getOddsProviderUsageSummary({
   since = null
 } = {}) {
-  const rows =
-    await listOddsProviderUsage({
-      since,
-      limit: 5000
-    });
+  const rows = await listOddsProviderUsage({
+    since,
+    limit: 5000
+  });
 
   const providers = {};
 
@@ -1058,8 +1015,7 @@ export async function getOddsProviderUsageSummary({
       };
     }
 
-    const provider =
-      providers[row.provider];
+    const provider = providers[row.provider];
 
     provider.requests += 1;
 
@@ -1067,18 +1023,14 @@ export async function getOddsProviderUsageSummary({
       provider.successes += 1;
 
       if (!provider.last_success_at) {
-        provider.last_success_at =
-          row.created_at;
+        provider.last_success_at = row.created_at;
       }
     } else {
       provider.failures += 1;
 
       if (!provider.last_failure_at) {
-        provider.last_failure_at =
-          row.created_at;
-
-        provider.last_error =
-          row.error_message;
+        provider.last_failure_at = row.created_at;
+        provider.last_error = row.error_message;
       }
     }
 
@@ -1091,23 +1043,17 @@ export async function getOddsProviderUsageSummary({
     }
 
     if (!provider.last_request_at) {
-      provider.last_request_at =
-        row.created_at;
+      provider.last_request_at = row.created_at;
     }
 
-    if (
-      !provider.last_quota &&
-      row.quota
-    ) {
-      provider.last_quota =
-        row.quota;
+    if (!provider.last_quota && row.quota) {
+      provider.last_quota = row.quota;
     }
   }
 
   return {
     since,
-    total_rows:
-      rows.length,
+    total_rows: rows.length,
     providers
   };
-} 
+}
