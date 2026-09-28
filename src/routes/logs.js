@@ -2,12 +2,16 @@ import express from 'express';
 import {
   addBetLogEntry,
   addPostmortem,
+  addPromo,
   deleteBetLogEntry,
   deletePostmortem,
+  deletePromo,
   listBetLogEntries,
   listPostmortems,
+  listPromos,
   updateBetLogEntry,
-  updatePostmortem
+  updatePostmortem,
+  updatePromo
 } from '../storage.js';
 
 export const logsRouter = express.Router();
@@ -98,6 +102,7 @@ logsRouter.post('/postmortems', async (req, res, next) => {
     next(error);
   }
 });
+
 logsRouter.patch('/postmortems/:id', async (req, res, next) => {
   try {
     const entry = await updatePostmortem(
@@ -122,6 +127,76 @@ logsRouter.delete('/postmortems/:id', async (req, res, next) => {
       return res.status(404).json({
         success: false,
         error: 'Postmortem not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      deleted_id: req.params.id
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+logsRouter.get('/promos', async (req, res, next) => {
+  try {
+    const promos = await listPromos({
+      limit: req.query.limit,
+      offset: req.query.offset,
+      status: req.query.status,
+      sportsbook: req.query.sportsbook,
+      promo_type: req.query.promo_type,
+      expires_before: req.query.expires_before,
+      expires_after: req.query.expires_after
+    });
+
+    res.json({
+      data: promos,
+      pagination: {
+        limit: Math.min(Math.max(Number(req.query.limit) || 100, 1), 200),
+        offset: Math.max(Number(req.query.offset) || 0, 0),
+        returned: promos.length
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+logsRouter.post('/promos', async (req, res, next) => {
+  try {
+    const promo = await addPromo(req.body || {});
+    res.status(201).json({ data: promo });
+  } catch (error) {
+    next(error);
+  }
+});
+
+logsRouter.patch('/promos/:id', async (req, res, next) => {
+  try {
+    const promo = await updatePromo(
+      req.params.id,
+      req.body || {}
+    );
+
+    res.json({
+      success: true,
+      data: promo
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+logsRouter.delete('/promos/:id', async (req, res, next) => {
+  try {
+    const deleted = await deletePromo(req.params.id);
+
+    if (!deleted) {
+      return res.status(404).json({
+        success: false,
+        error: 'Promo not found'
       });
     }
 
