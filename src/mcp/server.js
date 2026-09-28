@@ -83,6 +83,47 @@ async function gatewayGet(path, params = {}) {
   return body;
 }
 
+async function gatewayWrite(method, path, body = undefined) {
+  const url = `http://127.0.0.1:${config.port}${path}`;
+
+  const options = {
+    method,
+    headers: {
+      accept: 'application/json',
+      'content-type': 'application/json'
+    }
+  };
+
+  if (body !== undefined) {
+    options.body = JSON.stringify(body);
+  }
+
+  const response = await fetch(url, options);
+  const bodyText = await response.text();
+
+  let result;
+
+  try {
+    result = JSON.parse(bodyText);
+  } catch {
+    result = {
+      raw: bodyText
+    };
+  }
+
+  if (!response.ok) {
+    const message =
+      result?.error?.message ||
+      result?.error ||
+      result?.message ||
+      `SharpBet gateway request failed with HTTP ${response.status}`;
+
+    throw new Error(message);
+  }
+
+  return result;
+}
+
 function toolSuccess(result) {
   return {
     content: [
@@ -543,6 +584,398 @@ export const mcpHandler = createMcpHandler(() => {
           await gatewayGet(
             '/v1/logs/promos',
             args
+          )
+        );
+      } catch (error) {
+        return toolFailure(error);
+      }
+    }
+  );
+
+
+  server.registerTool(
+    'sharpbet_create_bet',
+    {
+      description:
+        'Save a new bet to the persistent SharpBet bet log after the user has confirmed the wager was placed.',
+      inputSchema: z.object({
+        date: z.string(),
+        sport: z.string(),
+        league: z.string(),
+        event: z.string(),
+        market: z.string(),
+        selection: z.string(),
+        line: z.union([z.string(), z.number(), z.null()]).optional(),
+        odds: z.string(),
+        sportsbook: z.string(),
+
+        gateway_event_id: z.union([z.string(), z.null()]).optional(),
+        provider_event_id: z.union([z.string(), z.null()]).optional(),
+        sport_key: z.union([z.string(), z.null()]).optional(),
+        market_key: z.union([z.string(), z.null()]).optional(),
+        outcome_key: z.union([z.string(), z.null()]).optional(),
+        bookmaker_key: z.union([z.string(), z.null()]).optional(),
+        odds_provider: z.union([z.string(), z.null()]).optional(),
+        commence_time: z.union([z.string(), z.null()]).optional(),
+
+        stake_usd: z.union([z.number(), z.null()]).optional(),
+        units: z.union([z.number(), z.null()]).optional(),
+        is_bonus_bet: z.boolean().optional(),
+        boost_used: z.boolean().optional(),
+
+        ev_percent: z.union([z.number(), z.null()]).optional(),
+        fair_odds: z.union([z.string(), z.number(), z.null()]).optional(),
+        kelly_percent: z.union([z.number(), z.null()]).optional(),
+
+        reason: z.union([z.string(), z.null()]).optional(),
+        confidence: z.union([z.string(), z.null()]).optional(),
+        primary_script: z.union([z.string(), z.null()]).optional(),
+        failure_script: z.union([z.string(), z.null()]).optional(),
+        supporting_evidence: z.union([z.string(), z.null()]).optional(),
+        contradicting_evidence: z.union([z.string(), z.null()]).optional(),
+        market_reason: z.union([z.string(), z.null()]).optional(),
+        handicap_tags: z.union([z.array(z.string()), z.null()]).optional(),
+
+        predicted_game_script: z.union([z.string(), z.null()]).optional(),
+        game_read_confidence: z.union([z.string(), z.null()]).optional(),
+        market_fit_confidence: z.union([z.string(), z.null()]).optional(),
+        price_confidence: z.union([z.string(), z.null()]).optional(),
+
+        recommended_line: z.union([z.string(), z.number(), z.null()]).optional(),
+        recommended_price: z.union([z.string(), z.number(), z.null()]).optional(),
+        worst_acceptable_line: z.union([z.string(), z.number(), z.null()]).optional(),
+        worst_acceptable_price: z.union([z.string(), z.number(), z.null()]).optional(),
+
+        execution_status: z.union([
+          z.enum(['BET NOW', 'WAIT', 'PASS']),
+          z.null()
+        ]).optional(),
+
+        pre_bet_information_risk: z.union([z.string(), z.null()]).optional(),
+        existing_portfolio_exposure: z.union([z.string(), z.null()]).optional(),
+        correlation_notes: z.union([z.string(), z.null()]).optional(),
+
+        actual_game_script: z.union([z.string(), z.null()]).optional(),
+        handicap_correct: z.union([z.boolean(), z.null()]).optional(),
+        market_selection_correct: z.union([z.boolean(), z.null()]).optional(),
+        key_assumption_that_failed: z.union([z.string(), z.null()]).optional(),
+        unexpected_event: z.union([z.string(), z.null()]).optional(),
+
+        result: z.union([z.string(), z.null()]).optional(),
+        payout_usd: z.union([z.number(), z.null()]).optional(),
+
+        closing_line: z.union([z.string(), z.number(), z.null()]).optional(),
+        closing_odds: z.union([z.string(), z.null()]).optional(),
+        closing_book: z.union([z.string(), z.null()]).optional(),
+        clv_percent: z.union([z.number(), z.null()]).optional(),
+        clv_status: z.union([z.string(), z.null()]).optional(),
+        clv_notes: z.union([z.string(), z.null()]).optional(),
+
+        postmortem: z.union([z.string(), z.null()]).optional()
+      })
+    },
+    async (args) => {
+      try {
+        return toolSuccess(
+          await gatewayWrite(
+            'POST',
+            '/v1/logs/bet-log',
+            args
+          )
+        );
+      } catch (error) {
+        return toolFailure(error);
+      }
+    }
+  );
+
+  server.registerTool(
+    'sharpbet_update_bet',
+    {
+      description:
+        'Update an existing SharpBet bet-log entry by ID. Use for grading results, CLV, postmortem fields, or other supported bet-analysis metadata.',
+      inputSchema: z.object({
+        id: z.string(),
+
+        gateway_event_id: z.union([z.string(), z.null()]).optional(),
+        provider_event_id: z.union([z.string(), z.null()]).optional(),
+        sport_key: z.union([z.string(), z.null()]).optional(),
+        market_key: z.union([z.string(), z.null()]).optional(),
+        outcome_key: z.union([z.string(), z.null()]).optional(),
+        bookmaker_key: z.union([z.string(), z.null()]).optional(),
+        odds_provider: z.union([z.string(), z.null()]).optional(),
+        commence_time: z.union([z.string(), z.null()]).optional(),
+
+        closing_line: z.union([z.string(), z.number(), z.null()]).optional(),
+        closing_odds: z.union([z.string(), z.null()]).optional(),
+        closing_book: z.union([z.string(), z.null()]).optional(),
+        clv_percent: z.union([z.number(), z.null()]).optional(),
+        clv_status: z.union([z.string(), z.null()]).optional(),
+        clv_notes: z.union([z.string(), z.null()]).optional(),
+
+        predicted_game_script: z.union([z.string(), z.null()]).optional(),
+        game_read_confidence: z.union([z.string(), z.null()]).optional(),
+        market_fit_confidence: z.union([z.string(), z.null()]).optional(),
+        price_confidence: z.union([z.string(), z.null()]).optional(),
+
+        recommended_line: z.union([z.string(), z.number(), z.null()]).optional(),
+        recommended_price: z.union([z.string(), z.number(), z.null()]).optional(),
+        worst_acceptable_line: z.union([z.string(), z.number(), z.null()]).optional(),
+        worst_acceptable_price: z.union([z.string(), z.number(), z.null()]).optional(),
+
+        execution_status: z.union([
+          z.enum(['BET NOW', 'WAIT', 'PASS']),
+          z.null()
+        ]).optional(),
+
+        pre_bet_information_risk: z.union([z.string(), z.null()]).optional(),
+        existing_portfolio_exposure: z.union([z.string(), z.null()]).optional(),
+        correlation_notes: z.union([z.string(), z.null()]).optional(),
+
+        actual_game_script: z.union([z.string(), z.null()]).optional(),
+        handicap_correct: z.union([z.boolean(), z.null()]).optional(),
+        market_selection_correct: z.union([z.boolean(), z.null()]).optional(),
+        key_assumption_that_failed: z.union([z.string(), z.null()]).optional(),
+        unexpected_event: z.union([z.string(), z.null()]).optional(),
+
+        result: z.union([z.string(), z.null()]).optional(),
+        payout_usd: z.union([z.number(), z.null()]).optional(),
+        postmortem: z.union([z.string(), z.null()]).optional(),
+
+        ev_percent: z.union([z.number(), z.null()]).optional(),
+        fair_odds: z.union([z.string(), z.number(), z.null()]).optional(),
+        kelly_percent: z.union([z.number(), z.null()]).optional(),
+
+        reason: z.union([z.string(), z.null()]).optional(),
+        confidence: z.union([z.string(), z.null()]).optional(),
+        primary_script: z.union([z.string(), z.null()]).optional(),
+        failure_script: z.union([z.string(), z.null()]).optional(),
+        supporting_evidence: z.union([z.string(), z.null()]).optional(),
+        contradicting_evidence: z.union([z.string(), z.null()]).optional(),
+        market_reason: z.union([z.string(), z.null()]).optional(),
+        handicap_tags: z.union([z.array(z.string()), z.null()]).optional()
+      })
+    },
+    async ({ id, ...updates }) => {
+      try {
+        return toolSuccess(
+          await gatewayWrite(
+            'PATCH',
+            `/v1/logs/bet-log/${encodeURIComponent(id)}`,
+            updates
+          )
+        );
+      } catch (error) {
+        return toolFailure(error);
+      }
+    }
+  );
+
+  server.registerTool(
+    'sharpbet_delete_bet',
+    {
+      description:
+        'Permanently delete a SharpBet bet-log entry by ID. Only use when the user explicitly wants that entry deleted.',
+      inputSchema: z.object({
+        id: z.string()
+      })
+    },
+    async ({ id }) => {
+      try {
+        return toolSuccess(
+          await gatewayWrite(
+            'DELETE',
+            `/v1/logs/bet-log/${encodeURIComponent(id)}`
+          )
+        );
+      } catch (error) {
+        return toolFailure(error);
+      }
+    }
+  );
+
+  server.registerTool(
+    'sharpbet_create_postmortem',
+    {
+      description:
+        'Save a daily or session-level SharpBet betting postmortem.',
+      inputSchema: z.object({
+        date: z.string(),
+        summary: z.string(),
+        best_decisions: z.array(z.string()).optional(),
+        worst_decisions: z.array(z.string()).optional(),
+        process_notes: z.array(z.string()).optional(),
+        adjustments: z.array(z.string()).optional()
+      })
+    },
+    async (args) => {
+      try {
+        return toolSuccess(
+          await gatewayWrite(
+            'POST',
+            '/v1/logs/postmortems',
+            args
+          )
+        );
+      } catch (error) {
+        return toolFailure(error);
+      }
+    }
+  );
+
+  server.registerTool(
+    'sharpbet_update_postmortem',
+    {
+      description:
+        'Update an existing SharpBet betting postmortem by ID.',
+      inputSchema: z.object({
+        id: z.string(),
+        date: z.string().optional(),
+        summary: z.string().optional(),
+        best_decisions: z.array(z.string()).optional(),
+        worst_decisions: z.array(z.string()).optional(),
+        process_notes: z.array(z.string()).optional(),
+        adjustments: z.array(z.string()).optional()
+      })
+    },
+    async ({ id, ...updates }) => {
+      try {
+        return toolSuccess(
+          await gatewayWrite(
+            'PATCH',
+            `/v1/logs/postmortems/${encodeURIComponent(id)}`,
+            updates
+          )
+        );
+      } catch (error) {
+        return toolFailure(error);
+      }
+    }
+  );
+
+  server.registerTool(
+    'sharpbet_delete_postmortem',
+    {
+      description:
+        'Permanently delete a SharpBet postmortem by ID. Only use when the user explicitly wants it deleted.',
+      inputSchema: z.object({
+        id: z.string()
+      })
+    },
+    async ({ id }) => {
+      try {
+        return toolSuccess(
+          await gatewayWrite(
+            'DELETE',
+            `/v1/logs/postmortems/${encodeURIComponent(id)}`
+          )
+        );
+      } catch (error) {
+        return toolFailure(error);
+      }
+    }
+  );
+
+  server.registerTool(
+    'sharpbet_create_promo',
+    {
+      description:
+        'Save a sportsbook promo, boost, or bonus bet to the persistent SharpBet promo inventory.',
+      inputSchema: z.object({
+        sportsbook: z.string(),
+        promo_type: z.string(),
+        promo_name: z.string(),
+        boost_percent: z.union([z.number().min(0), z.null()]).optional(),
+        max_stake: z.union([z.number().min(0), z.null()]).optional(),
+        min_odds: z.union([z.string(), z.null()]).optional(),
+        eligible_sports: z.array(z.string()).optional(),
+        eligible_markets: z.array(z.string()).optional(),
+        bet_type: z.union([z.string(), z.null()]).optional(),
+        minimum_legs: z.union([z.number().int().min(1), z.null()]).optional(),
+        minimum_combined_odds: z.union([z.string(), z.null()]).optional(),
+        bonus_bet_amount: z.union([z.number().min(0), z.null()]).optional(),
+        expires_at: z.union([z.string(), z.null()]).optional(),
+        status: z.union([
+          z.enum(['NEW', 'AVAILABLE', 'USED', 'EXPIRED', 'VOID']),
+          z.null()
+        ]).optional(),
+        notes: z.union([z.string(), z.null()]).optional(),
+        used_at: z.union([z.string(), z.null()]).optional()
+      })
+    },
+    async (args) => {
+      try {
+        return toolSuccess(
+          await gatewayWrite(
+            'POST',
+            '/v1/logs/promos',
+            args
+          )
+        );
+      } catch (error) {
+        return toolFailure(error);
+      }
+    }
+  );
+
+  server.registerTool(
+    'sharpbet_update_promo',
+    {
+      description:
+        'Update an existing SharpBet promo by ID, including availability, usage, expiration, or terms.',
+      inputSchema: z.object({
+        id: z.string(),
+        sportsbook: z.string().optional(),
+        promo_type: z.string().optional(),
+        promo_name: z.string().optional(),
+        boost_percent: z.union([z.number().min(0), z.null()]).optional(),
+        max_stake: z.union([z.number().min(0), z.null()]).optional(),
+        min_odds: z.union([z.string(), z.null()]).optional(),
+        eligible_sports: z.array(z.string()).optional(),
+        eligible_markets: z.array(z.string()).optional(),
+        bet_type: z.union([z.string(), z.null()]).optional(),
+        minimum_legs: z.union([z.number().int().min(1), z.null()]).optional(),
+        minimum_combined_odds: z.union([z.string(), z.null()]).optional(),
+        bonus_bet_amount: z.union([z.number().min(0), z.null()]).optional(),
+        expires_at: z.union([z.string(), z.null()]).optional(),
+        status: z.union([
+          z.enum(['NEW', 'AVAILABLE', 'USED', 'EXPIRED', 'VOID']),
+          z.null()
+        ]).optional(),
+        notes: z.union([z.string(), z.null()]).optional(),
+        used_at: z.union([z.string(), z.null()]).optional()
+      })
+    },
+    async ({ id, ...updates }) => {
+      try {
+        return toolSuccess(
+          await gatewayWrite(
+            'PATCH',
+            `/v1/logs/promos/${encodeURIComponent(id)}`,
+            updates
+          )
+        );
+      } catch (error) {
+        return toolFailure(error);
+      }
+    }
+  );
+
+  server.registerTool(
+    'sharpbet_delete_promo',
+    {
+      description:
+        'Permanently delete a SharpBet promo by ID. Only use when the user explicitly wants the promo removed.',
+      inputSchema: z.object({
+        id: z.string()
+      })
+    },
+    async ({ id }) => {
+      try {
+        return toolSuccess(
+          await gatewayWrite(
+            'DELETE',
+            `/v1/logs/promos/${encodeURIComponent(id)}`
           )
         );
       } catch (error) {
