@@ -161,7 +161,7 @@ export const mcpHandler = createMcpHandler(() => {
     'sharpbet_health',
     {
       description:
-        'Check whether the SharpBet gateway and MCP service are running.',
+        'Check gateway availability and per-league data capabilities. ok means the service is running, not that every feed is configured. Never use test_data or mock results as live evidence.',
       inputSchema: z.object({})
     },
     async () => {
@@ -197,7 +197,7 @@ export const mcpHandler = createMcpHandler(() => {
     'sharpbet_list_games',
     {
       description:
-        'List games for a supported league. Use this for schedules and game discovery.',
+        'List league games, or betting events through the configured odds providers when general league data is unavailable. Odds coverage is not a complete schedule; an empty result does not prove no games exist. In odds mode date is UTC and season/week/cursor filters are unsupported. Prefer sharpbet_get_events with explicit time bounds for local-day betting slates. Never treat mock data as live.',
       inputSchema: z.object({
         league: leagueSchema,
         date: z.string().optional(),
