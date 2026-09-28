@@ -1,5 +1,46 @@
 # Sports GPT Gateway
 
+## League data without another subscription
+
+If the selected general-data provider has no API key, league game discovery now
+uses the existing odds gateway and its configured provider fallback order. You
+can also explicitly select `DEFAULT_PROVIDER=odds` or `PROVIDER_NFL=odds`.
+This returns betting events, **not a complete league schedule**. Empty results
+do not establish that no games exist, scores remain null, and pagination/coverage
+limitations are reported in `meta`. The `date` filter is a UTC calendar date;
+use the existing odds-events tool with explicit UTC bounds for a local day.
+Season/week/cursor filters are not supported by this fallback and return 400.
+
+Detailed game records, team directories, and standings return actionable 503
+errors in odds mode. Existing event-odds and scores tools remain available with
+their provider-specific coverage. Configured BALLDONTLIE access is preserved.
+SportsDataIO is still an unfinished adapter, not an alternative enabled by this fix.
+
+Mock data is disabled by default. Local tests can opt in with
+`ALLOW_MOCK_DATA=true` and `DEFAULT_PROVIDER=mock`, or additionally enable
+`MOCK_WHEN_UNCONFIGURED=true` for local fallback. `NODE_ENV=production` always
+blocks mock data. Existing mock selections route to odds when mock access is
+disabled. `/health` now includes `league_data` to distinguish configured,
+unavailable, unimplemented and test-only feeds. `ok: true` means the HTTP service
+is running; `configured_not_probed` does not prove upstream connectivity.
+
+### Deploy this fix on Render
+
+1. Deploy the updated source from `main`, using the repository root.
+2. Keep the existing odds-provider keys, provider order and Supabase settings.
+   No new API key or subscription is required for betting-event discovery.
+3. Set `NODE_ENV=production`, `MOCK_WHEN_UNCONFIGURED=false` and
+   `ALLOW_MOCK_DATA=false`. To explicitly use odds discovery for all leagues,
+   set `DEFAULT_PROVIDER=odds` and remove general-provider per-league overrides,
+   or set those overrides to `odds`. Do this only after the new source is deployed.
+4. Verify health reports `odds` for leagues without a general-data key and that
+   NFL events contain provider-prefixed IDs rather than `mock-1`.
+5. Verify unsupported standings requests return an explicit error and recheck
+   event odds, bet-log reads and promo reads. No log or promo storage code changes.
+
+Run `npm test` before deployment. Tests use local fixtures and a local upstream
+server; they do not read or modify the production bet log or promo inventory.
+
 This starter gives you two things:
 
 1. A small backend that normalizes live sports data across `NBA`, `NFL`, `NCAAM`, `NCAAF`, `MLB`, and `NHL`

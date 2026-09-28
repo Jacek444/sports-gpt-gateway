@@ -3,7 +3,7 @@ import { toNodeHandler } from '@modelcontextprotocol/node';
 import { config } from './config.js';
 import { toErrorResponse } from './errors.js';
 import { LEAGUE_DEFINITIONS, assertLeagueCode } from './leagues.js';
-import { getProviderDefaults, getProviderForLeague } from './providers/index.js';
+import { getProviderDefaults, getProviderForLeague, getLeagueProviderStatus } from './providers/index.js';
 import { getOddsProviderStatus } from './oddsProviders/index.js';
 import { logsRouter } from './routes/logs.js';
 import { oddsApiRouter } from './routes/oddsApi.js';
@@ -26,6 +26,7 @@ app.get('/health', (req, res) => {
   res.json({
     ok: true,
     provider_defaults: getProviderDefaults(),
+    league_data: getLeagueProviderStatus(),
     odds: getOddsProviderStatus()
   });
 });
