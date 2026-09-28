@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SharpBet Sports GPT Gateway
-  version: 2.11.0
+  version: 2.11.1
   description: Unified SharpBet sports data gateway for NBA, NFL, NCAAM, NCAAF, MLB, and NHL. Uses the
     SharpBet odds-provider chain with SportsGameOdds, ParlayAPI, and The Odds API, with optional OddsApiIo
     provider support. Includes odds, scores, events, event-specific odds, provider status, persistent
@@ -1765,6 +1765,27 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  data:
+                    type: array
+                    items: &id001
+                      $ref: '#/components/schemas/PromoEntry'
+                  pagination:
+                    type: object
+                    properties:
+                      limit:
+                        type: integer
+                      offset:
+                        type: integer
+                      returned:
+                        type: integer
+                    required:
+                    - limit
+                    - offset
+                    - returned
+                required:
+                - data
+                - pagination
     post:
       operationId: createPromo
       summary: Save a new promo
@@ -1782,6 +1803,10 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  data: *id001
+                required:
+                - data
   /v1/logs/promos/{id}:
     patch:
       operationId: updatePromo
@@ -1807,6 +1832,13 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  success:
+                    type: boolean
+                  data: *id001
+                required:
+                - success
+                - data
     delete:
       operationId: deletePromo
       summary: Delete a saved promo
@@ -1824,6 +1856,14 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  success:
+                    type: boolean
+                  deleted_id:
+                    type: string
+                required:
+                - success
+                - deleted_id
 components:
   schemas:
     League:
@@ -2036,7 +2076,7 @@ components:
           type:
           - string
           - 'null'
-        confidence: &id018
+        confidence: &id019
           type:
           - string
           - 'null'
@@ -2044,36 +2084,36 @@ components:
             or PASS.
 
             '
-        primary_script: &id019
+        primary_script: &id020
           type:
           - string
           - 'null'
           description: Primary expected game script supporting the wager.
-        failure_script: &id020
+        failure_script: &id021
           type:
           - string
           - 'null'
           description: 'Main scenario in which the handicap or market selection can fail.
 
             '
-        supporting_evidence: &id021
+        supporting_evidence: &id022
           type:
           - string
           - 'null'
           description: Strongest evidence supporting the handicap.
-        contradicting_evidence: &id022
+        contradicting_evidence: &id023
           type:
           - string
           - 'null'
           description: Strongest evidence arguing against the handicap.
-        market_reason: &id023
+        market_reason: &id024
           type:
           - string
           - 'null'
           description: 'Why this market was selected as the best expression of the handicap.
 
             '
-        handicap_tags: &id024
+        handicap_tags: &id025
           oneOf:
           - type: array
             items:
@@ -2082,52 +2122,52 @@ components:
           description: 'Structured tags describing the main handicapping mechanisms.
 
             '
-        predicted_game_script: &id001
+        predicted_game_script: &id002
           type:
           - string
           - 'null'
           description: Pregame expected game script captured when the wager is logged.
-        game_read_confidence: &id002
+        game_read_confidence: &id003
           type:
           - string
           - 'null'
           description: Confidence in the underlying game or player read, separate from market fit and
             price.
-        market_fit_confidence: &id003
+        market_fit_confidence: &id004
           type:
           - string
           - 'null'
           description: Confidence that the selected betting market cleanly expresses the handicap.
-        price_confidence: &id004
+        price_confidence: &id005
           type:
           - string
           - 'null'
           description: Confidence in the current number or price relative to the handicap.
-        recommended_line: &id005
+        recommended_line: &id006
           type:
           - string
           - number
           - 'null'
           description: Preferred wager line at recommendation time.
-        recommended_price: &id006
+        recommended_price: &id007
           type:
           - string
           - number
           - 'null'
           description: Preferred wager price or odds at recommendation time.
-        worst_acceptable_line: &id007
+        worst_acceptable_line: &id008
           type:
           - string
           - number
           - 'null'
           description: Worst line still considered acceptable without re-handicapping.
-        worst_acceptable_price: &id008
+        worst_acceptable_price: &id009
           type:
           - string
           - number
           - 'null'
           description: Worst price or odds still considered acceptable without re-handicapping.
-        execution_status: &id009
+        execution_status: &id010
           type:
           - string
           - 'null'
@@ -2137,43 +2177,43 @@ components:
           - PASS
           - null
           description: Execution decision at the logged number, separate from confidence.
-        pre_bet_information_risk: &id010
+        pre_bet_information_risk: &id011
           type:
           - string
           - 'null'
           description: Material unresolved information risk present before the wager.
-        existing_portfolio_exposure: &id011
+        existing_portfolio_exposure: &id012
           type:
           - string
           - 'null'
           description: Snapshot of relevant existing exposure when the wager is added.
-        correlation_notes: &id012
+        correlation_notes: &id013
           type:
           - string
           - 'null'
           description: Notes on correlation, duplicate script exposure, or conflicts with existing positions.
-        actual_game_script: &id013
+        actual_game_script: &id014
           type:
           - string
           - 'null'
           description: Postgame description of how the game or player script actually developed.
-        handicap_correct: &id014
+        handicap_correct: &id015
           type:
           - boolean
           - 'null'
           description: Post-bet assessment of whether the underlying handicap was directionally correct.
-        market_selection_correct: &id015
+        market_selection_correct: &id016
           type:
           - boolean
           - 'null'
           description: Post-bet assessment of whether the chosen market was the right expression of the
             handicap.
-        key_assumption_that_failed: &id016
+        key_assumption_that_failed: &id017
           type:
           - string
           - 'null'
           description: Most important pregame assumption that failed, when identifiable.
-        unexpected_event: &id017
+        unexpected_event: &id018
           type:
           - string
           - 'null'
@@ -2287,23 +2327,23 @@ components:
           type:
           - string
           - 'null'
-        predicted_game_script: *id001
-        game_read_confidence: *id002
-        market_fit_confidence: *id003
-        price_confidence: *id004
-        recommended_line: *id005
-        recommended_price: *id006
-        worst_acceptable_line: *id007
-        worst_acceptable_price: *id008
-        execution_status: *id009
-        pre_bet_information_risk: *id010
-        existing_portfolio_exposure: *id011
-        correlation_notes: *id012
-        actual_game_script: *id013
-        handicap_correct: *id014
-        market_selection_correct: *id015
-        key_assumption_that_failed: *id016
-        unexpected_event: *id017
+        predicted_game_script: *id002
+        game_read_confidence: *id003
+        market_fit_confidence: *id004
+        price_confidence: *id005
+        recommended_line: *id006
+        recommended_price: *id007
+        worst_acceptable_line: *id008
+        worst_acceptable_price: *id009
+        execution_status: *id010
+        pre_bet_information_risk: *id011
+        existing_portfolio_exposure: *id012
+        correlation_notes: *id013
+        actual_game_script: *id014
+        handicap_correct: *id015
+        market_selection_correct: *id016
+        key_assumption_that_failed: *id017
+        unexpected_event: *id018
         result:
           type:
           - string
@@ -2333,13 +2373,13 @@ components:
           type:
           - string
           - 'null'
-        confidence: *id018
-        primary_script: *id019
-        failure_script: *id020
-        supporting_evidence: *id021
-        contradicting_evidence: *id022
-        market_reason: *id023
-        handicap_tags: *id024
+        confidence: *id019
+        primary_script: *id020
+        failure_script: *id021
+        supporting_evidence: *id022
+        contradicting_evidence: *id023
+        market_reason: *id024
+        handicap_tags: *id025
       additionalProperties: false
     BetLogEntry:
       allOf:
@@ -2424,7 +2464,7 @@ components:
       - sportsbook
       - promo_type
       - promo_name
-      properties: &id025
+      properties: &id026
         sportsbook:
           type: string
           description: Sportsbook offering the promo.
@@ -2513,7 +2553,7 @@ components:
           description: Timestamp the promo was used, if applicable.
     PromoEntryUpdate:
       type: object
-      properties: *id025
+      properties: *id026
     PromoEntry:
       allOf:
       - type: object
