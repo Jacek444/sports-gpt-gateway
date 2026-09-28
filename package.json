@@ -6,7 +6,8 @@
   "description": "Normalized sports data gateway for GPT Actions across NBA, NFL, NCAAM, NCAAF, MLB, and NHL.",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "dev": "node --watch src/server.js",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=20.0.0"
