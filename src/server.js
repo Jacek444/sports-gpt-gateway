@@ -1,4 +1,5 @@
 import express from 'express';
+import { toNodeHandler } from '@modelcontextprotocol/node';
 import { config } from './config.js';
 import { toErrorResponse } from './errors.js';
 import { LEAGUE_DEFINITIONS, assertLeagueCode } from './leagues.js';
@@ -6,11 +7,18 @@ import { getProviderDefaults, getProviderForLeague } from './providers/index.js'
 import { getOddsProviderStatus } from './oddsProviders/index.js';
 import { logsRouter } from './routes/logs.js';
 import { oddsApiRouter } from './routes/oddsApi.js';
+import { mcpHandler } from './mcp/server.js';
 
 const app = express();
 
 app.use('/openapi', express.static('openapi'));
 app.use(express.json());
+
+const mcpNodeHandler = toNodeHandler(mcpHandler);
+
+app.all('/mcp', (req, res) => {
+  void mcpNodeHandler(req, res, req.body);
+});
 app.use('/v1/logs', logsRouter);
 app.use('/v1/odds', oddsApiRouter);
 
