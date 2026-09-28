@@ -984,5 +984,78 @@ export const mcpHandler = createMcpHandler(() => {
     }
   );
 
+
+  server.registerTool(
+    'sharpbet_grade_and_save_clv',
+    {
+      description:
+        'Grade up to 50 bets against historical closing odds and optionally save the resulting CLV fields back to the SharpBet bet log.',
+      inputSchema: z.object({
+        write_back: z.boolean().default(true),
+        bets: z.array(
+          z.object({
+            bet_id: z.union([z.string(), z.null()]).optional(),
+
+            sport_key: z.union([z.string(), z.null()]).optional(),
+            sport: z.union([z.string(), z.null()]).optional(),
+            league: z.union([z.string(), z.null()]).optional(),
+
+            player: z.union([z.string(), z.null()]).optional(),
+
+            market: z.union([z.string(), z.null()]).optional(),
+            market_key: z.union([z.string(), z.null()]).optional(),
+
+            line: z.union([
+              z.string(),
+              z.number(),
+              z.null()
+            ]).optional(),
+
+            outcome: z.union([z.string(), z.null()]).optional(),
+            outcome_key: z.union([z.string(), z.null()]).optional(),
+            selection: z.union([z.string(), z.null()]).optional(),
+
+            taken_odds: z.union([
+              z.string(),
+              z.number(),
+              z.null()
+            ]).optional(),
+
+            odds: z.union([
+              z.string(),
+              z.number(),
+              z.null()
+            ]).optional(),
+
+            sportsbook: z.union([z.string(), z.null()]).optional(),
+            bookmaker: z.union([z.string(), z.null()]).optional(),
+            bookmaker_key: z.union([z.string(), z.null()]).optional(),
+
+            event: z.union([z.string(), z.null()]).optional(),
+            home_team: z.union([z.string(), z.null()]).optional(),
+            away_team: z.union([z.string(), z.null()]).optional(),
+
+            game_date: z.union([z.string(), z.null()]).optional(),
+            date: z.union([z.string(), z.null()]).optional(),
+            commence_time: z.union([z.string(), z.null()]).optional()
+          }).passthrough()
+        ).min(1).max(50)
+      })
+    },
+    async (args) => {
+      try {
+        return toolSuccess(
+          await gatewayWrite(
+            'POST',
+            '/v1/odds/clv/grade-and-save',
+            args
+          )
+        );
+      } catch (error) {
+        return toolFailure(error);
+      }
+    }
+  );
+
   return server;
 });
