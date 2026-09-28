@@ -1,15 +1,14 @@
 openapi: 3.1.0
 info:
   title: SharpBet Sports GPT Gateway
-  version: 2.10.1
-  description: 'Unified SharpBet sports data gateway for NBA, NFL, NCAAM, NCAAF, MLB, and NHL. Uses the
+  version: 2.11.0
+  description: Unified SharpBet sports data gateway for NBA, NFL, NCAAM, NCAAF, MLB, and NHL. Uses the
     SharpBet odds-provider chain with SportsGameOdds, ParlayAPI, and The Odds API, with optional OddsApiIo
     provider support. Includes odds, scores, events, event-specific odds, provider status, persistent
     provider usage history, paginated betting logs, recommendation snapshots, structured handicap tags,
     CLV tracking, event/market identifiers, compact CLV lookup, local CLV tracking from historical closing
-    odds, and postmortems.
-
-    '
+    odds, and postmortems. Adds persistent promo inventory with create, list/filter, update-status, and
+    delete operations.
 servers:
 - url: https://sports-gpt-gateway.onrender.com
   description: SharpBet Sports GPT Gateway on Render
@@ -1715,6 +1714,116 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /v1/logs/promos:
+    get:
+      operationId: listPromos
+      summary: List saved promos
+      description: Returns saved promo inventory with optional status, sportsbook, type, expiration, and
+        pagination filters.
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          minimum: 0
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - NEW
+          - AVAILABLE
+          - USED
+          - EXPIRED
+          - VOID
+      - name: sportsbook
+        in: query
+        schema:
+          type: string
+      - name: promo_type
+        in: query
+        schema:
+          type: string
+      - name: expires_before
+        in: query
+        schema:
+          type: string
+      - name: expires_after
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Promo inventory
+          content:
+            application/json:
+              schema:
+                type: object
+    post:
+      operationId: createPromo
+      summary: Save a new promo
+      description: Adds a sportsbook boost, bonus bet, or other promotion to the persistent promo inventory.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PromoEntryInput'
+      responses:
+        '201':
+          description: Promo created
+          content:
+            application/json:
+              schema:
+                type: object
+  /v1/logs/promos/{id}:
+    patch:
+      operationId: updatePromo
+      summary: Update a saved promo
+      description: Updates promo terms, expiration, notes, or status such as AVAILABLE, USED, EXPIRED,
+        or VOID.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PromoEntryUpdate'
+      responses:
+        '200':
+          description: Promo updated
+          content:
+            application/json:
+              schema:
+                type: object
+    delete:
+      operationId: deletePromo
+      summary: Delete a saved promo
+      description: Permanently deletes a promo inventory entry by ID.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Promo deleted
+          content:
+            application/json:
+              schema:
+                type: object
 components:
   schemas:
     League:
@@ -2309,3 +2418,110 @@ components:
         - id
         - created_at
         additionalProperties: true
+    PromoEntryInput:
+      type: object
+      required:
+      - sportsbook
+      - promo_type
+      - promo_name
+      properties: &id025
+        sportsbook:
+          type: string
+          description: Sportsbook offering the promo.
+        promo_type:
+          type: string
+          description: Promo category, such as profit boost, odds boost, bonus bet, parlay boost, or SGP
+            boost.
+        promo_name:
+          type: string
+          description: Short descriptive name for the promo.
+        boost_percent:
+          type:
+          - number
+          - 'null'
+          minimum: 0
+          description: Boost percentage when applicable.
+        max_stake:
+          type:
+          - number
+          - 'null'
+          minimum: 0
+          description: Maximum eligible wager amount in USD.
+        min_odds:
+          type:
+          - string
+          - 'null'
+          description: Minimum eligible odds, such as -200 or +100.
+        eligible_sports:
+          type: array
+          items:
+            type: string
+          description: Sports eligible for the promo; empty means unspecified.
+        eligible_markets:
+          type: array
+          items:
+            type: string
+          description: Markets eligible for the promo; empty means unspecified.
+        bet_type:
+          type:
+          - string
+          - 'null'
+          description: Bet-format restriction, such as SINGLE, PARLAY, SGP, or ANY.
+        minimum_legs:
+          type:
+          - integer
+          - 'null'
+          minimum: 1
+          description: Minimum required legs for a parlay or SGP promo.
+        minimum_combined_odds:
+          type:
+          - string
+          - 'null'
+          description: Minimum combined odds required for the wager.
+        bonus_bet_amount:
+          type:
+          - number
+          - 'null'
+          minimum: 0
+          description: Bonus-bet amount in USD when applicable.
+        expires_at:
+          type:
+          - string
+          - 'null'
+          description: Promo expiration timestamp, preferably ISO 8601.
+        status:
+          type:
+          - string
+          - 'null'
+          enum:
+          - NEW
+          - AVAILABLE
+          - USED
+          - EXPIRED
+          - VOID
+          - null
+          description: Inventory state. Defaults to NEW.
+        notes:
+          type:
+          - string
+          - 'null'
+          description: Restrictions, activation details, exclusions, or other promo notes.
+        used_at:
+          type:
+          - string
+          - 'null'
+          description: Timestamp the promo was used, if applicable.
+    PromoEntryUpdate:
+      type: object
+      properties: *id025
+    PromoEntry:
+      allOf:
+      - type: object
+        properties:
+          id:
+            type: string
+          created_at:
+            type: string
+          updated_at:
+            type: string
+      - $ref: '#/components/schemas/PromoEntryInput'
