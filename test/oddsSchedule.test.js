@@ -10,7 +10,7 @@ test('normalizes real event identity without inventing score or live state', asy
     assert.equal(sport, 'americanfootball_nfl');
     return response();
   });
-  const result = await provider.listGames({ league: 'NFL' });
+  const result = await provider.listGames({ date: '2026-09-29', league: 'NFL' });
   assert.equal(result.data[0].id, 'theOddsApi:event-1');
   assert.equal(result.data[0].home_team.name, 'Chicago Bears');
   assert.deepEqual(result.data[0].score, { home: null, away: null });
@@ -24,7 +24,7 @@ test('normalizes SportsGameOdds data and explicit live status', async () => {
     teams: { home: { teamID: 'CHI', names: { long: 'Chicago Bears', short: 'CHI' } }, away: { names: { long: 'Philadelphia Eagles' } } },
     status: { startsAt: event.commence_time, live: true }
   }] }));
-  const result = await provider.listGames({ league: 'NFL', team: 'CHI', status: 'live' });
+  const result = await provider.listGames({ date: '2026-09-29', league: 'NFL', team: 'CHI', status: 'live' });
   assert.equal(result.data.length, 1);
   assert.equal(result.data[0].status.code, 'live');
   assert.equal(result.data[0].id, 'sportsGameOdds:sgo-1');
@@ -41,10 +41,10 @@ test('date filtering is UTC and enforced even if an upstream ignores it', async 
 });
 
 test('empty coverage and pagination remain explicitly incomplete', async () => {
-  const empty = await new OddsScheduleProvider(async () => response([])).listGames({ league: 'NFL' });
+  const empty = await new OddsScheduleProvider(async () => response([])).listGames({ date: '2026-09-29', league: 'NFL' });
   assert.equal(empty.meta.complete_schedule, false);
   assert.match(empty.meta.note, /Empty results do not prove/);
-  const limited = await new OddsScheduleProvider(async () => ({ ...response([event, { ...event, id: 'two' }]), nextCursor: 'next' })).listGames({ league: 'NFL', limit: 1 });
+  const limited = await new OddsScheduleProvider(async () => ({ ...response([event, { ...event, id: 'two' }]), nextCursor: 'next' })).listGames({ date: '2026-09-29', league: 'NFL', limit: 1 });
   assert.equal(limited.meta.truncated, true);
   assert.equal(limited.data.length, 1);
 });
@@ -52,24 +52,42 @@ test('empty coverage and pagination remain explicitly incomplete', async () => {
 test('invalid dates and unsupported filters fail before consuming provider quota', async () => {
   const provider = new OddsScheduleProvider(async () => { assert.fail('must not call upstream'); });
   for (const extra of [{ date: '2026-02-30' }, { season: 2026 }, { week: 3 }, { cursor: 'next' }, { limit: 0 }]) {
-    await assert.rejects(provider.listGames({ league: 'NFL', ...extra }), { status: 400 });
+    await assert.rejects(provider.listGames({ date: '2026-09-29', league: 'NFL', ...extra }), { status: 400 });
   }
 });
 
 test('malformed and mock upstream responses cannot masquerade as live events', async () => {
   for (const result of [{ provider: 'mock', data: [event] }, { provider: 'theOddsApi', data: {} }, response([{ id: 'broken' }])]) {
-    await assert.rejects(new OddsScheduleProvider(async () => result).listGames({ league: 'NFL' }), { status: 502 });
+    await assert.rejects(new OddsScheduleProvider(async () => result).listGames({ date: '2026-09-29', league: 'NFL' }), { status: 502 });
   }
 });
 
 test('provider failures propagate instead of manufacturing games', async () => {
   const provider = new OddsScheduleProvider(async () => { throw new Error('quota exhausted'); });
-  await assert.rejects(provider.listGames({ league: 'NFL' }), /quota exhausted/);
+  await assert.rejects(provider.listGames({ date: '2026-09-29', league: 'NFL' }), /quota exhausted/);
 });
 
 test('unsupported general-data requests return actionable errors', async () => {
   const provider = new OddsScheduleProvider();
   for (const method of ['getGame', 'listTeams', 'getStandings']) {
-    await assert.rejects(provider[method]({ league: 'NFL' }), (error) => error.status === 503 && /No test data/.test(error.message));
+    await assert.rejects(provider[method]({ date: '2026-09-29', league: 'NFL' }), (error) => error.status === 503 && /No test data/.test(error.message));
   }
+});
+
+
+test('undated discovery starts today and ignores malformed archived events', async () => {
+  const provider = new OddsScheduleProvider(async (_sport, params) => {
+    assert.equal(params.commenceTimeFrom, '2026-09-28T00:00:00.000Z');
+    assert.equal(params.commenceTimeTo, undefined);
+    return response([{ id: 'archived-special-event', commence_time: '2024-02-11T03:00:00Z' }, event]);
+  }, () => Date.parse('2026-09-28T22:00:00Z'));
+  const result = await provider.listGames({ league: 'NFL' });
+  assert.deepEqual(result.data.map((game) => game.id), ['theOddsApi:event-1']);
+  assert.equal(result.meta.starts_at_or_after, '2026-09-28T00:00:00.000Z');
+});
+
+test('an explicit historical date still permits matching archived games', async () => {
+  const provider = new OddsScheduleProvider(async () => response([{ ...event, commence_time: '2024-09-10T00:15:00Z' }]));
+  const result = await provider.listGames({ league: 'NFL', date: '2024-09-10' });
+  assert.equal(result.data.length, 1);
 });
