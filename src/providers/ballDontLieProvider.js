@@ -1,8 +1,9 @@
+import { BallDontLieClient } from '../clients/ballDontLieClient.js';
 import { BaseProvider } from './base.js';
 import { HttpError } from '../errors.js';
 
 const LEAGUE_PATHS = {
-  NBA: '/v1',
+  NBA: '/nba/v1',
   NFL: '/nfl/v1',
   NCAAM: '/ncaab/v1',
   NCAAF: '/ncaaf/v1',
@@ -36,23 +37,26 @@ function toNumber(value) {
     return null;
   }
   const number = Number(value);
-  return Number.isNaN(number) ? null : number;
+  return Number.isFinite(number) ? number : null;
 }
 
 function buildTeamName(team) {
   return pick(
     team.full_name,
     team.display_name,
-    [team.location, team.name].filter(Boolean).join(' '),
-    [team.city, team.name].filter(Boolean).join(' '),
-    [team.college, team.name].filter(Boolean).join(' '),
+    team.location ? [team.location, team.name].filter(Boolean).join(' ') : null,
+    team.city ? [team.city, team.name].filter(Boolean).join(' ') : null,
+    team.college ? [team.college, team.name].filter(Boolean).join(' ') : null,
     team.name
   );
 }
 
 function normalizeTeam(league, rawTeam = {}) {
+  const id=pick(rawTeam.id,rawTeam.team_id), name=buildTeamName(rawTeam);
+  if (!id || !name) throw new HttpError(502,'BALLDONTLIE returned an incomplete team.');
   return {
-    id: String(pick(rawTeam.id, rawTeam.team_id, 'unknown')),
+    id: `balldontlie:${league}:${id}`,
+    provider_team_id: String(id),
     league,
     name: pick(buildTeamName(rawTeam), 'Unknown Team'),
     short_name: pick(rawTeam.short_display_name, rawTeam.name, rawTeam.full_name, 'Unknown Team'),
@@ -63,92 +67,31 @@ function normalizeTeam(league, rawTeam = {}) {
   };
 }
 
-function inferStatus(rawGame) {
-  const display = String(pick(rawGame.status, 'Unknown'));
-  const lower = display.toLowerCase();
-
-  if (rawGame.postponed === true || lower.includes('postponed')) {
-    return {
-      code: 'postponed',
-      display,
-      is_live: false,
-      period: toNumber(rawGame.period),
-      clock: pick(rawGame.time, null)
-    };
+export function normalizeGame(league, rawGame) {
+  if (!rawGame?.id) throw new HttpError(502,'BALLDONTLIE returned a game without an ID.');
+  const homeTeam=normalizeTeam(league,pick(rawGame.home_team,rawGame.homeTeam,{}));
+  const awayTeam=normalizeTeam(league,pick(rawGame.visitor_team,rawGame.away_team,rawGame.awayTeam,{}));
+  const display=String(pick(rawGame.status,rawGame.game_state,'Unknown'));
+  const state=String(rawGame.status_state || '').toLowerCase();
+  let code=({scheduled:'scheduled',in_progress:'live',final:'final',postponed:'postponed',delayed:'postponed',suspended:'postponed',canceled:'cancelled',abandoned:'cancelled',unknown:'unknown'})[state];
+  if (!code) {
+    const lower=display.toLowerCase();
+    code=rawGame.postponed || /postponed|delayed|suspended/.test(lower)?'postponed'
+      : /cancel|abandon/.test(lower)?'cancelled'
+      : /^(final.*|post|finished|off)$/.test(lower)?'final'
+      : /^(in|live|in progress|in_progress|ht|ot|crit)$/.test(lower) || /\b(quarter|qtr|halftime|half time|intermission)\b|^q[1-4]$|^p[1-3]$/.test(lower)?'live'
+      : /^(scheduled|pre|not started|future|fut)$/.test(lower) || /^\d{1,2}:\d{2}\s*(am|pm)?(?:\s*(et|est|edt))?$/i.test(lower)?'scheduled':'unknown';
   }
-
-  if (
-    lower === 'final' ||
-    lower === 'post' ||
-    lower === 'finished' ||
-    lower.includes('final')
-  ) {
-    return {
-      code: 'final',
-      display,
-      is_live: false,
-      period: toNumber(rawGame.period),
-      clock: pick(rawGame.time, null)
-    };
-  }
-
-  if (
-    lower === 'in' ||
-    lower.includes('qtr') ||
-    lower.includes('quarter') ||
-    lower.includes('half') ||
-    lower.includes('period') ||
-    lower.includes('ot') ||
-    lower.includes('intermission') ||
-    lower === 'live'
-  ) {
-    return {
-      code: 'live',
-      display,
-      is_live: true,
-      period: toNumber(rawGame.period),
-      clock: pick(rawGame.time, null)
-    };
-  }
-
-  if (lower === 'scheduled' || lower === 'pre' || /\d/.test(display)) {
-    return {
-      code: 'scheduled',
-      display,
-      is_live: false,
-      period: toNumber(rawGame.period),
-      clock: pick(rawGame.time, null)
-    };
-  }
-
+  const start=pick(rawGame.datetime,rawGame.start_time_utc,rawGame.date,rawGame.game_date);
+  if (!Number.isFinite(Date.parse(start))) throw new HttpError(502,'BALLDONTLIE returned an invalid game time.');
+  const score=(...values)=>['scheduled','cancelled'].includes(code)?null:toNumber(pick(...values));
   return {
-    code: 'unknown',
-    display,
-    is_live: false,
-    period: toNumber(rawGame.period),
-    clock: pick(rawGame.time, null)
-  };
-}
-
-function normalizeGame(league, rawGame) {
-  const homeTeam = normalizeTeam(league, pick(rawGame.home_team, rawGame.homeTeam, {}));
-  const awayTeam = normalizeTeam(league, pick(rawGame.visitor_team, rawGame.away_team, rawGame.awayTeam, {}));
-
-  return {
-    id: String(rawGame.id),
-    league,
-    provider: 'balldontlie',
-    season: toNumber(rawGame.season),
-    week: toNumber(rawGame.week),
-    start_time: pick(rawGame.datetime, rawGame.date),
-    status: inferStatus(rawGame),
-    home_team: homeTeam,
-    away_team: awayTeam,
-    score: {
-      home: toNumber(pick(rawGame.home_team_score, rawGame.home_score)),
-      away: toNumber(pick(rawGame.visitor_team_score, rawGame.away_score, rawGame.visitor_score))
-    },
-    venue: pick(rawGame.venue, rawGame.venue_name)
+    id:`balldontlie:${league}:${rawGame.id}`,provider_game_id:String(rawGame.id),league,provider:'balldontlie',
+    season:toNumber(rawGame.season),week:toNumber(rawGame.week),start_time:start,
+    status:{code,display,is_live:code==='unknown'?null:code==='live',period:toNumber(rawGame.period),clock:pick(rawGame.time,rawGame.display_clock,rawGame.time_remaining)},
+    home_team:homeTeam,away_team:awayTeam,
+    score:{home:score(rawGame.home_team_score,rawGame.home_score,rawGame.home_team_data?.runs),away:score(rawGame.visitor_team_score,rawGame.away_score,rawGame.visitor_score,rawGame.away_team_data?.runs)},
+    venue:pick(rawGame.venue,rawGame.venue_name)
   };
 }
 
@@ -199,10 +142,11 @@ function normalizeStanding(league, rawStanding) {
 }
 
 export class BallDontLieProvider extends BaseProvider {
-  constructor({ apiKey, baseUrl }) {
+  constructor({ apiKey, baseUrl, ...options }) {
     super('balldontlie');
     this.apiKey = apiKey;
     this.baseUrl = (baseUrl || 'https://api.balldontlie.io').replace(/\/$/, '');
+    this.client=new BallDontLieClient({apiKey,baseUrl:this.baseUrl,...options});
   }
 
   ensureConfigured() {
@@ -265,137 +209,73 @@ export class BallDontLieProvider extends BaseProvider {
     return url;
   }
 
-  async fetchJson(url) {
-    this.ensureConfigured();
-
-    const response = await fetch(url, {
-      headers: {
-        Authorization: this.apiKey
-      }
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new HttpError(response.status, `BALLDONTLIE request failed: ${response.status} ${text}`);
-    }
-
-    return response.json();
+  async fetchJson(url, ttl) { return this.client.get(url,ttl); }
+  envelope(data,meta={}) {return {provider:this.name,data,meta:{fetched_at:this.client.lastReadAt,coverage:'provider_schedule',complete_schedule:false,...meta},quota:this.client.quota};}
+  status() {return this.client.status();}
+  async getAccess() {
+    const body=await this.fetchJson(new URL('/account/v1/me',this.baseUrl),300000);
+    const r=body.data || body;
+    if(!Array.isArray(r.subscriptions))throw new HttpError(502,'BALLDONTLIE returned invalid subscription information.');
+    return {provider:this.name,tier:r.tier,subscriptions:r.subscriptions.map(s=>({sport:s.sport,tier:s.tier})),checked_at:this.client.lastReadAt};
   }
-
-  async listGames({ league, date, season, week, team, status, cursor, limit = 25 }) {
-    const query = {
-      cursor,
-      limit,
-      dates: date ? [date] : [],
-      seasons: season ? [season] : []
-    };
-
-    if ((league === 'NFL' || league === 'NCAAF') && week) {
-      query.weeks = [week];
-    }
-
-    if (team && isNumeric(team)) {
-      query.teamIds = [team];
-    }
-
-    const payload = await this.fetchJson(this.resourceUrl(league, 'games', null, query));
-    let games = (payload.data || []).map((game) => normalizeGame(league, game));
-
-    if (team && !isNumeric(team)) {
-      const term = team.trim().toLowerCase();
-      games = games.filter((game) => {
-        const haystacks = [
-          game.home_team.name,
-          game.home_team.abbreviation,
-          game.away_team.name,
-          game.away_team.abbreviation
-        ].filter(Boolean).map((value) => value.toLowerCase());
-        return haystacks.some((value) => value.includes(term));
-      });
-    }
-
-    if (status) {
-      const normalizedStatus = String(status).toLowerCase();
-      games = games.filter((game) => game.status.code === normalizedStatus);
-    }
-
-    return {
-      data: games,
-      meta: {
-        cursor: cursor ? String(cursor) : null,
-        next_cursor: payload.meta?.next_cursor !== undefined ? String(payload.meta.next_cursor) : null,
-        per_page: payload.meta?.per_page ?? limit
-      }
-    };
+  validate({date,season,week,limit=25,team}) {
+    if(!Number.isInteger(limit)||limit<1||limit>100)throw new HttpError(400,'limit must be 1-100.');
+    if(date && (!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date))throw new HttpError(400,'date must be YYYY-MM-DD.');
+    if(season!==undefined&&!Number.isInteger(season)||week!==undefined&&(!Number.isInteger(week)||week<1))throw new HttpError(400,'Invalid season or week.');
+    if(team?.includes(':')&&!/^balldontlie:[A-Z]+:\d+$/.test(team))throw new HttpError(400,'Use a BALLDONTLIE team ID or a team name.');
   }
-
-  async getGame({ league, gameId }) {
-    const payload = await this.fetchJson(this.resourceUrl(league, 'games', gameId));
-    if (!payload.data) {
-      throw new HttpError(404, `Game ${gameId} not found`);
+  async listGames(params) {
+    this.validate(params);
+    const {league,season,week,status,limit=25}=params;
+    const date=params.date || (season===undefined&&week===undefined?new Date().toISOString().slice(0,10):undefined);
+    const cursor=params.cursor?String(params.cursor).replace(/^balldontlie:/,''):undefined;
+    if(cursor&&!/^\d+$/.test(cursor))throw new HttpError(400,'Invalid BALLDONTLIE cursor.');
+    let team=params.team;
+    if(team?.startsWith('balldontlie:')) {
+      const parts=team.split(':');if(parts[1]!==league)throw new HttpError(400,'Team ID belongs to another league.');team=parts[2];
     }
-
-    return {
-      data: normalizeGame(league, payload.data)
-    };
+    const query={cursor,limit,dates:date?[date]:[],seasons:season!==undefined?[season]:[]};
+    if(week!==undefined) {
+      if(!['NFL','NCAAF'].includes(league))throw new HttpError(400,'week applies to football only.');
+      query.weeks=[week];
+    }
+    if(team&&isNumeric(team))query.teamIds=[team];
+    const payload=await this.fetchJson(this.resourceUrl(league,'games',null,query));
+    if(!Array.isArray(payload.data))throw new HttpError(502,'BALLDONTLIE returned an invalid games response.');
+    let games=payload.data.map(game=>normalizeGame(league,game));
+    if(team&&!isNumeric(team)) {
+      const term=String(team).toLowerCase();games=games.filter(g=>[g.home_team,g.away_team].some(t=>[t.name,t.abbreviation].some(v=>String(v).toLowerCase().includes(term))));
+    }
+    if(status)games=games.filter(g=>g.status.code===status);
+    const next=payload.meta?.next_cursor;
+    return this.envelope(games,{cursor:params.cursor||null,next_cursor:next==null?null:`balldontlie:${next}`,per_page:payload.meta?.per_page??limit,truncated:next!=null,filter_scope:'returned_page',date_timezone:'provider_date',note:'Team-name and status filters apply to the returned page; follow next_cursor for additional matches. Dates use the provider date field; preserve returned start-time offsets.'});
   }
-
-  async listTeams({ league, search = '', limit = 50 }) {
-    let cursor = null;
-    let pages = 0;
-    const teams = [];
-    const fetchLimit = search ? 100 : Math.min(limit, 100);
-
-    do {
-      const payload = await this.fetchJson(this.resourceUrl(league, 'teams', null, {
-        cursor,
-        limit: fetchLimit
-      }));
-
-      const pageItems = (payload.data || []).map((team) => normalizeTeam(league, team));
-      teams.push(...pageItems);
-      cursor = payload.meta?.next_cursor ?? null;
-      pages += 1;
-    } while (cursor && (search ? pages < 10 : teams.length < limit) && pages < 10);
-
-    const term = search.trim().toLowerCase();
-    const filtered = term
-      ? teams.filter((team) => {
-        const haystack = [
-          team.name,
-          team.short_name,
-          team.market,
-          team.abbreviation
-        ].filter(Boolean).join(' ').toLowerCase();
-        return haystack.includes(term);
-      })
-      : teams;
-
-    return {
-      data: filtered.slice(0, limit)
-    };
+  async getGame({league,gameId}) {
+    const match=String(gameId).match(/^balldontlie:([A-Z]+):(\d+)$/);
+    if(match&&match[1]!==league)throw new HttpError(400,'Game ID belongs to another league.');
+    const id=match?match[2]:String(gameId);
+    if(!/^\d+$/.test(id))throw new HttpError(400,'Use a BALLDONTLIE game ID for this league.');
+    const payload=await this.fetchJson(this.resourceUrl(league,'games',league==='NHL'?null:id,league==='NHL'?{gameIds:[id]}:{}));
+    const row=Array.isArray(payload.data)?payload.data.find(g=>String(g.id)===id):payload.data;
+    if(!row)throw new HttpError(404,'BALLDONTLIE game was not found.');
+    if(String(row.id)!==id)throw new HttpError(502,'BALLDONTLIE returned a different game.');
+    return this.envelope(normalizeGame(league,row));
   }
-
-  async getStandings({ league, season, conference, division }) {
-    const payload = await this.fetchJson(this.resourceUrl(league, 'standings', null, {
-      season,
-      limit: 100
-    }));
-
-    let data = (payload.data || []).map((standing) => normalizeStanding(league, standing));
-
-    if (conference) {
-      const term = String(conference).toLowerCase();
-      data = data.filter((row) => String(row.conference || '').toLowerCase().includes(term));
-    }
-
-    if (division) {
-      const term = String(division).toLowerCase();
-      data = data.filter((row) => String(row.division || '').toLowerCase().includes(term));
-    }
-
-    return {
-      data
-    };
+  async listTeams({league,search='',limit=50}) {
+    this.validate({limit});
+    const payload=await this.fetchJson(this.resourceUrl(league,'teams',null,{limit:100}),86400000);
+    if(!Array.isArray(payload.data))throw new HttpError(502,'BALLDONTLIE returned an invalid teams response.');
+    const term=search.toLowerCase();
+    const rows=payload.data.map(t=>normalizeTeam(league,t)).filter(t=>!term||[t.name,t.abbreviation,t.market].some(v=>String(v||'').toLowerCase().includes(term)));
+    return this.envelope(rows.slice(0,limit),{truncated:rows.length>limit||payload.meta?.next_cursor!=null,next_cursor:payload.meta?.next_cursor??null,filter_scope:'returned_page'});
+  }
+  async getStandings({league,season,conference,division}) {
+    this.validate({season});
+    const payload=await this.fetchJson(this.resourceUrl(league,'standings',null,{season,limit:100}),300000);
+    if(!Array.isArray(payload.data))throw new HttpError(502,'BALLDONTLIE returned invalid standings.');
+    let data=payload.data.map(s=>normalizeStanding(league,s));
+    if(conference)data=data.filter(r=>String(r.conference||'').toLowerCase().includes(conference.toLowerCase()));
+    if(division)data=data.filter(r=>String(r.division||'').toLowerCase().includes(division.toLowerCase()));
+    return this.envelope(data,{truncated:payload.meta?.next_cursor!=null});
   }
 }

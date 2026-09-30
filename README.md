@@ -1,5 +1,43 @@
 # Sports GPT Gateway
 
+## BALLDON'T LIE league data
+
+Save `BALLDONTLIE_API_KEY` in Render and deploy. With the default configuration,
+league requests try BALLDON'T LIE, API-Sports when configured, then the existing
+odds-event discovery chain. Explicit provider preferences still win. An upstream
+failure, plan restriction or request limit can trigger discovery fallback;
+valid empty results are preserved. Responses retain their actual source and
+fallback reasons. Season/week requests never silently become current odds events.
+
+Games (including scores), game details and team directories use the same REST
+and SharpBet MCP tools as the other general-data sources. Access varies by sport
+and subscription: NBA free includes games, while NHL games require a paid tier.
+Standings also require the relevant plan. This integration does not add free
+BALLDON'T LIE betting odds, injuries or player statistics.
+
+The free-tier guard allows five upstream requests per rolling minute per process.
+Games are cached for 60 seconds, team catalogues for a day, and simultaneous
+identical requests are coalesced. Cache hits remain usable during cooldowns.
+Rejected resource families are cached for 15 minutes: a paid standings failure
+does not disable free games. Multiple instances share the upstream allowance;
+restarts clear local cache and guards.
+
+Game/team IDs start `balldontlie:<LEAGUE>:`. Detail requests, team IDs and cursors
+stay with their source; they never get sent to a different provider. Pagination
+returns `next_cursor` with a `balldontlie:` prefix. Team-name/status filtering
+applies to the returned page; follow game cursors for additional matches. Team
+directories expose truncation if the upstream catalogue is incomplete. Dates
+use the provider's date field and returned timestamps retain their offsets.
+Undated game discovery defaults to today; supply a season for historical queries.
+
+`/v1/providers/access?provider=balldontlie` returns only subscription tiers,
+never account email or the API key. Health identifies configuration and fallback
+order, not verified access to every sport. Live data requests establish coverage.
+
+References: [NBA access tiers](https://nba.balldontlie.io/),
+[NHL access tiers](https://nhl.balldontlie.io/),
+[Account API](https://www.balldontlie.io/account/).
+
 ## OddsPapi and API-Sports direct accounts
 
 Save `ODDSPAPI_API_KEY` and `API_SPORTS_API_KEY` in Render, then deploy. Both
@@ -331,7 +369,7 @@ When the user asks about scores, schedules, standings, or live game state for NB
 
 The current implementation uses BALLDONTLIE endpoint patterns documented on their official docs:
 
-- NBA: `/v1/...`
+- NBA: `/nba/v1/...`
 - NFL: `/nfl/v1/...`
 - NCAAF: `/ncaaf/v1/...`
 - NCAAB: `/ncaab/v1/...`
