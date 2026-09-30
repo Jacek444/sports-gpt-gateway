@@ -143,6 +143,7 @@ paths:
               - parlayApi
               - theOddsApi
               - oddsApiIo
+              - sharpApi
         - in: query
           name: all
           required: false
@@ -185,6 +186,7 @@ paths:
               - parlayApi
               - theOddsApi
               - oddsApiIo
+              - sharpApi
 
         - in: query
           name: regions
@@ -283,6 +285,7 @@ paths:
               - parlayApi
               - theOddsApi
               - oddsApiIo
+              - sharpApi
 
         - in: query
           name: daysFrom
@@ -341,6 +344,7 @@ paths:
               - parlayApi
               - theOddsApi
               - oddsApiIo
+              - sharpApi
 
         - in: query
           name: dateFormat
@@ -410,6 +414,7 @@ paths:
               - parlayApi
               - theOddsApi
               - oddsApiIo
+              - sharpApi
 
         - in: query
           name: regions

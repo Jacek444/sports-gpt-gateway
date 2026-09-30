@@ -28,6 +28,11 @@ export const config = {
   oddsRequestTimeoutMs: envNumber('ODDS_REQUEST_TIMEOUT_MS', 12000),
 
   oddsProviders: {
+    sharpApi: {
+      enabled: envBool('SHARP_API_ENABLED', true),
+      apiKey: env('SHARP_API_KEY'),
+      baseUrl: env('SHARP_API_BASE_URL', 'https://api.sharpapi.io')
+    },
     theOddsApi: {
       enabled: envBool('THE_ODDS_API_ENABLED', true),
       apiKey: env('ODDS_API_KEY'),
@@ -58,7 +63,7 @@ export const config = {
 
   oddsProviderOrder: env(
     'ODDS_PROVIDER_ORDER',
-    'sportsGameOdds,parlayApi,theOddsApi'
+    'sharpApi,sportsGameOdds,parlayApi,theOddsApi'
   )
     .split(',')
     .map((name) => name.trim())
@@ -66,7 +71,7 @@ export const config = {
 
   oddsSportsProviderOrder: env(
     'ODDS_SPORTS_PROVIDER_ORDER',
-    'parlayApi,theOddsApi,sportsGameOdds'
+    'sharpApi,parlayApi,theOddsApi,sportsGameOdds'
   )
     .split(',')
     .map((name) => name.trim())
