@@ -15,7 +15,7 @@ test('MoneyLine odds, game details and SportsDB fallback flow through the gatewa
       assert.equal(req.headers['x-api-key'],'fixture-key');
       if(failed){res.statusCode=429;return send({success:false,error:{message:'Rate limit'}});}
       if(u.pathname.endsWith('/teams'))return send({success:true,data:[{teamId:'nfl-home',name:'Home',leagueId:'nfl'}]});
-      if(u.pathname.endsWith('/odds'))return send({success:true,data:[{eventId:'nfl-42',leagueId:'nfl',bookmakers:[{bookmakerId:'draftkings',sourceType:'sportsbook',sourceRegion:'us',markets:[{marketType:'moneyline',isAlternate:false,isStale:false,lastUpdate:new Date().toISOString(),outcomes:[{name:'Home',side:'home',price:-120,isPriceable:true},{name:'Away',side:'away',price:110,isPriceable:true}]}]}]}],meta:{pages:1}});
+      if(u.pathname.endsWith('/odds'))return send({success:true,data:{eventId:'nfl-42',leagueId:'nfl',bookmakers:[{bookmakerId:'draftkings',sourceType:'sportsbook',sourceRegion:'us',markets:[{marketType:'moneyline',isAlternate:false,isStale:false,lastUpdate:new Date().toISOString(),outcomes:[{name:'Home',side:'home',price:-120,isPriceable:true},{name:'Away',side:'away',price:110,isPriceable:true}]}]}]},meta:{pages:1}});
       return send({success:true,data:u.pathname.endsWith('/nfl-42')?event:[event],meta:{pages:1}});
     }
     if(u.pathname==='/db/123/search_all_teams.php')return send({teams:[{strLeague:'NFL',strSport:'American Football',idLeague:'4391',idTeam:'1',strTeam:'Home'}]});

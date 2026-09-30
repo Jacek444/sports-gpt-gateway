@@ -13,7 +13,7 @@ export class MoneylineOddsProvider {
     if(params.regions&&csv(params.regions).some(r=>r!=='us'))throw fail('US sportsbooks only.');
     if(params.bookmakers&&csv(params.bookmakers).some(b=>!['draftkings','fanduel'].includes(b)))throw fail('this adapter supports DraftKings and FanDuel only.');
     if(params.oddsFormat&&!['american','decimal'].includes(params.oddsFormat)||params.dateFormat&&!['iso','unix'].includes(params.dateFormat))throw new HttpError(400,'Invalid odds or date format.');
-    const from=params.commenceTimeFrom?Date.parse(params.commenceTimeFrom):this.now(),to=params.commenceTimeTo?Date.parse(params.commenceTimeTo):from+7*86400000;
+    const from=params.commenceTimeFrom?Date.parse(params.commenceTimeFrom):Math.floor(this.now()/60000)*60000,to=params.commenceTimeTo?Date.parse(params.commenceTimeTo):from+7*86400000;
     if(!Number.isFinite(from)||!Number.isFinite(to)||from>to)throw new HttpError(400,'Invalid time window.');
     const markets=csv(params.markets||'h2h,spreads,totals');if(!markets.length||markets.some(m=>!Object.values(MARKETS).includes(m)))throw fail('core h2h, spreads and totals only.');
     return {from,to,markets,books:csv(params.bookmakers||'draftkings,fanduel')};
@@ -72,22 +72,21 @@ export class MoneylineOddsProvider {
     const league=this.league(sport),bounds=this.validate(params);
     const events=id?[await this.data.event(league,id)]:await this.allEvents(league,bounds);
     const byId=new Map(events.map(r=>{const event=this.event(r,league,params,bounds);return [r.eventId,event];}));
-    const rows=[];
-    if(id){
-      const body=await this.data.client.get(`/events/${id}/odds`,{sourceType:'sportsbook',include:'outcomeFields'});
-      if(!body.data||Array.isArray(body.data))throw fail('invalid event odds response.');rows.push(body.data);
-    }else{
-      for(let page=1;page<=3;page++){
-        const body=await this.data.client.get('/odds',{league:MONEYLINE_LEAGUES[league],sourceType:'sportsbook',include:'outcomeFields',limit:50,page});
-        if(!Array.isArray(body.data))throw fail('invalid odds board.');rows.push(...body.data);
-        if(body.meta?.pages!==undefined?body.meta.pages<=page:body.data.length<50)break;
-        if(page===3)throw fail('odds pagination exceeds the safe request budget.');
-      }
+    const requested=csv(params.eventIds).map(value=>value.replace(/^moneyline:/,''));
+    if(requested.length>4)throw fail('at most four explicit event IDs per free-budget board request.');
+    const candidates=events.filter(r=>byId.get(r.eventId)&&(!requested.length||requested.includes(r.eventId))).sort((a,b)=>Date.parse(a.startTime)-Date.parse(b.startTime));
+    if(requested.some(value=>!candidates.some(r=>r.eventId===value)))throw fail('a requested event is not in the usable pregame window.');
+    const selected=candidates.slice(0,id?1:4),rows=[];
+    // The broad odds catalogue includes hundreds of archived records. A small
+    // explicit board uses at most four price calls, not an unbounded scan.
+    for(const event of selected){
+      const body=await this.data.client.get(`/events/${event.eventId}/odds`,{sourceType:'sportsbook',include:'outcomeFields'});
+      if(!body.data||Array.isArray(body.data)||body.data.eventId!==event.eventId)throw fail('invalid event odds identity.');rows.push(body.data);
     }
-    const requested=csv(params.eventIds),data=rows.filter(r=>!requested.length||requested.includes(r.eventId)).map(r=>byId.get(r.eventId)?this.normalize(r,byId.get(r.eventId),bounds,params):null).filter(Boolean);
+    const data=rows.map(r=>byId.get(r.eventId)?this.normalize(r,byId.get(r.eventId),bounds,params):null).filter(Boolean);
     const found=new Set(data.flatMap(e=>e.bookmakers.flatMap(b=>b.markets.map(m=>m.key))));
-    if(!data.length||bounds.markets.some(m=>!found.has(m)))throw fail('no fresh sportsbook prices for every requested market.');
-    return this.envelope(id?data[0]:data,{requested_markets:bounds.markets});
+    if(!data.length||bounds.markets.some(m=>!found.has(m)))throw new HttpError(503,'MoneyLine: no fresh sportsbook prices for every requested market.',{provider:'moneyline',market_reference:rows.flatMap(r=>(r.bookmakers||[]).filter(b=>bounds.books.includes(b.bookmakerId)).flatMap(b=>(b.markets||[]).filter(m=>MARKETS[m.marketType]).map(m=>({book:b.bookmakerId,type:m.marketType,last_update:m.lastUpdate,alternate:m.isAlternate,stale:m.isStale,outcomes:m.outcomes?.length,priceable:m.outcomes?.filter(o=>o.isPriceable===true).length})))).slice(0,12)});
+    return this.envelope(id?data[0]:data,{requested_markets:bounds.markets,truncated:candidates.length>selected.length||data.length<selected.length,events_discovered:candidates.length,events_queried:selected.length,board_limit:id?1:4,note:'Free-budget board covers up to four earliest upcoming events. Use event-specific odds for another matchup; missing or stale prices are excluded.'});
   }
   getOddsBoard(sport,params){return this.odds(sport,params);}
   getEventOdds(sport,id,params){return this.odds(sport,params,id);}
