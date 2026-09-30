@@ -5,7 +5,7 @@ import { HttpError } from '../errors.js';
 export class FreeProviderClient {
   constructor({ name, apiKey, baseUrl, queryAuth = false, fetcher = (...args) => fetch(...args), intervalMs = 0 }) {
     Object.assign(this, { name, apiKey, baseUrl, queryAuth, fetcher, intervalMs });
-    this.cache = new Map(); this.pending = new Map(); this.nextCall = 0; this.blockedUntil = 0;
+    this.cache = new Map(); this.failures = new Map(); this.pending = new Map(); this.nextCall = 0; this.blockedUntil = 0;
     this.quota = null; this.lastError = null; this.lastSuccessAt = null; this.requests = 0;
   }
   async get(path, params = {}, ttl = 60000) {
@@ -13,11 +13,17 @@ export class FreeProviderClient {
     const cacheKey = JSON.stringify([path, params]);
     const cached = this.cache.get(cacheKey);
     if (cached?.expires > Date.now()) { this.lastReadAt = cached.observedAt; return cached.body; }
+    const failure = this.failures.get(cacheKey);
+    if (failure?.expires > Date.now()) throw failure.error;
     if (this.pending.has(cacheKey)) return this.pending.get(cacheKey);
     const task = this.request(path, params).then(body => {
       if (ttl > 0) this.cache.set(cacheKey, { body, observedAt: this.lastSuccessAt, expires: Date.now() + ttl });
       if (this.cache.size > 500) this.cache.delete(this.cache.keys().next().value);
       return body;
+    }).catch(error => {
+      if (error.details?.reason === 'access_or_plan_restriction') this.failures.set(cacheKey,{error,expires:Date.now()+900000});
+      if (this.failures.size > 500) this.failures.delete(this.failures.keys().next().value);
+      throw error;
     }).finally(() => this.pending.delete(cacheKey));
     this.pending.set(cacheKey, task);
     return task;
@@ -47,7 +53,7 @@ export class FreeProviderClient {
         minute_limit: res.headers.get('x-ratelimit-limit'),
         minute_remaining: res.headers.get('x-ratelimit-remaining')
       };
-      const errorText = JSON.stringify(body?.errors || {});
+      const errorText = JSON.stringify(body?.errors || body?.error || body?.message || {}).split(this.apiKey).join('[REDACTED]');
       const hasErrors = body?.errors && Object.keys(body.errors).length > 0;
       if (!res.ok || hasErrors) {
         const limited = res.status === 429 || /rateLimit|request limit|too many|daily limit/i.test(errorText);
@@ -55,8 +61,10 @@ export class FreeProviderClient {
         const reason = limited ? 'quota_or_rate_limit' : restricted ? 'access_or_plan_restriction' : 'upstream_error';
         const dailyExhausted = limited && this.quota.daily_remaining === '0';
         const delay = dailyExhausted ? 86400000 - Date.now() % 86400000 : limited ? 60000 : 900000;
-        if (limited || restricted) this.blockedUntil = Date.now() + delay;
-        throw new HttpError(503, `${this.name}: ${reason}.`, { provider: this.name, fields: Object.keys(body?.errors || {}).filter(k=>['name','league','season','date','timezone','requests','token','rateLimit','plan','endpoint','bug','page'].includes(k)), upstreamStatus: limited ? 429 : res.status, reason, retryAfter: Math.ceil(delay / 1000) });
+        if (limited || res.status === 401 || res.status === 403 || /token|api.?key/i.test(errorText)) this.blockedUntil = Date.now() + delay;
+        const upstreamMessage = errorText.split(this.apiKey).join('[REDACTED]')
+          .replace(/https?:\/\/[^\s"]+/g,'[URL]').replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]+/g,'[EMAIL]').slice(0,300);
+        throw new HttpError(503, `${this.name}: ${reason}.`, { upstream_message: upstreamMessage, provider: this.name, fields: Object.keys(body?.errors || {}).filter(k=>['name','league','season','date','timezone','requests','token','rateLimit','plan','endpoint','bug','page'].includes(k)), upstreamStatus: limited ? 429 : res.status, reason, retryAfter: Math.ceil(delay / 1000) });
       }
       if (body === null) throw new HttpError(502, `${this.name} returned invalid JSON.`);
       this.lastSuccessAt = new Date().toISOString(); this.lastReadAt = this.lastSuccessAt; this.lastError = null;

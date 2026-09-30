@@ -78,3 +78,21 @@ test('OddsPapi discovers exact competition, returns pregame board, reuses refere
  const r=await p.getOddsBoard('NFL',{});assert.equal(r.data.length,1);assert.equal(r.data[0].bookmakers[0].markets.length,3);
  await p.getOddsBoard('NFL',{});assert.equal(calls.length,5);assert.equal(p.subscription.remaining,244);
 });
+
+test('plan restrictions cache only the rejected request and leave historical data accessible',async()=>{
+ let calls=0;
+ const c=new FreeProviderClient({name:'apisports',...settings,fetcher:async(url)=>{calls++;return url.searchParams.get('season')==='2026'?json({errors:{plan:`Free plans do not have access to this season ${key}`}}):json({response:[game()]});}});
+ await assert.rejects(c.get('/games',{season:2026}),e=>!JSON.stringify(e).includes(key));
+ await assert.rejects(c.get('/games',{season:2026}));assert.equal(calls,1);
+ assert.equal((await c.get('/games',{season:2024})).response.length,1);assert.equal(calls,2);
+});
+test('multi-book boards query one book per call and merge exact fixture identities',async()=>{
+ const seen=[];const a=structuredClone(account);a.subscriptions[0].bookmakers={draftkings:{},fanduel:{}};
+ const p=oddsProvider(async(url)=>{
+  const book=url.searchParams.get('bookmakers');
+  if(url.pathname==='/v4/odds-by-tournaments') {seen.push(book);assert.ok(!book.includes(','));const f=fixture();f.startTime='2099-01-02T00:00:00Z';f.bookmakerOdds={[book]:f.bookmakerOdds.pinnacle};return json([f]);}
+  return json({'/v4/account':a,'/v4/sports':[{slug:'american-football',sportId:12}],'/v4/tournaments':[{tournamentId:100,tournamentSlug:'nfl',categorySlug:'usa'}],'/v4/markets':markets}[url.pathname]);
+ });
+ const r=await p.getOddsBoard('NFL',{commenceTimeFrom:'2099-01-01T00:00:00Z'});
+ assert.equal(r.data.length,1);assert.deepEqual(r.data[0].bookmakers.map(b=>b.key),['draftkings','fanduel']);assert.deepEqual(seen,['draftkings','fanduel']);
+});

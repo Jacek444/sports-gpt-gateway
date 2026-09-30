@@ -86,7 +86,8 @@ export class OddsPapiProvider {
     // Only query books actually granted to this key; never silently ignore a
     // requested book the subscription cannot provide.
     const requested=csv(params.bookmakers);
-    const books=requested.length ? requested : Object.keys(sub.bookmakers).filter(b=>['pinnacle','draftkings','fanduel','betmgm'].includes(b)).slice(0,3);
+    const books=requested.length ? requested : ['draftkings','fanduel'].filter(b=>Object.hasOwn(sub.bookmakers,b));
+    if (!requested.length && !books.length && Object.hasOwn(sub.bookmakers,'pinnacle')) books.push('pinnacle');
     if (!books.length || books.length>3 || books.some(b=>!Object.hasOwn(sub.bookmakers,b))) throw unavailable('requested sportsbooks are not available on this plan, or more than three were requested.');
     return books;
   }
@@ -166,12 +167,28 @@ export class OddsPapiProvider {
     const bounds=this.validate(params), markets=csv(params.markets || 'h2h,spreads,totals');
     if (!markets.length || markets.some(m=>!['h2h','spreads','totals'].includes(m))) throw unavailable('this adapter currently supports h2h, spreads and totals only; use another provider for props or alternates.');
     const books=await this.books(params), scope=await this.scope(sport), catalogue=await this.catalogue(scope);
-    const args={bookmakers:books.join(','),verbosity:3};
-    const body=eventId ? await this.call('/v4/odds',{...args,fixtureId:eventId},60000) : await this.call('/v4/odds-by-tournaments',{...args,tournamentIds:scope.tournamentId},60000);
-    const rows=eventId?[body]:Array.isArray(body)?body:null;
-    if (!rows) throw unavailable('invalid odds response.');
     const ids=eventId?[eventId]:csv(params.eventIds);
-    const data=rows.filter(r=>!ids.length||ids.includes(r.fixtureId)).map(r=>this.normalizeOdds(r,scope,params,bounds,books,catalogue,markets)).filter(Boolean);
+    const merged=new Map();
+    // Free v4 rejects multiple bookmakers on the tournament endpoint, even
+    // though individual fixture requests accept them. Cache each book's board
+    // separately so subsequent comparisons can reuse it.
+    const batches=eventId?[books]:books.map(book=>[book]);
+    for (const batch of batches) {
+      const args={bookmakers:batch.join(','),verbosity:3};
+      const body=eventId ? await this.call('/v4/odds',{...args,fixtureId:eventId},60000) : await this.call('/v4/odds-by-tournaments',{...args,tournamentIds:scope.tournamentId},60000);
+      const rows=eventId?[body]:Array.isArray(body)?body:null;
+      if (!rows) throw unavailable('invalid odds response.');
+      for (const row of rows.filter(r=>!ids.length||ids.includes(r.fixtureId))) {
+        const event=this.normalizeOdds(row,scope,params,bounds,batch,catalogue,markets);
+        if (!event) continue;
+        const previous=merged.get(event.id);
+        if (previous) {
+          if (previous.home_team!==event.home_team || previous.away_team!==event.away_team || previous.commence_time!==event.commence_time) throw unavailable('inconsistent fixture identity across sportsbook snapshots.');
+          previous.bookmakers.push(...event.bookmakers);
+        } else merged.set(event.id,event);
+      }
+    }
+    const data=[...merged.values()];
     const found=new Set(data.flatMap(e=>e.bookmakers.flatMap(b=>b.markets.map(m=>m.key))));
     if (!data.length||markets.some(m=>!found.has(m))) throw unavailable('no usable odds for every requested market.',{market_reference:catalogue.filter(m=>m.marketLength===2&&!m.playerProp).slice(0,15).map(m=>({name:m.marketName,type:m.marketType,period:m.period}))});
     return this.envelope(eventId?data[0]:data,{requested_markets:markets});

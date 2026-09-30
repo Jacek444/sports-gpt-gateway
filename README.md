@@ -16,7 +16,10 @@ NBA/NCAAM, MLB and NHL where the subscription and exact catalogue mapping allow
 it. Unsupported markets, sports, books or ambiguous mappings fail into the
 existing discovery/board fallback. Provider-specific event IDs never cross feeds.
 `changedAt` means the price last changed, not a refreshed feed timestamp.
-Props, live odds, standings and injuries are not added by this integration.
+Tournament boards are requested one sportsbook at a time, then joined only
+when fixture IDs, teams and start times match. Defaults prefer DraftKings and
+FanDuel; Pinnacle is used if neither is subscribed. Explicit book requests are
+honored. Props, live odds, standings and injuries are not added by this integration.
 
 API-Sports supplies games, scores and team directories through the existing
 league tools when the selected general-data provider lacks a key. Configured
@@ -25,6 +28,11 @@ provider preferences remain authoritative. To select it explicitly, set
 Basketball, American football, baseball and hockey use their own v1 endpoints;
 league/season IDs are resolved from their catalogues. Dates are UTC. Current
 season access depends on the key's plan and is not implied by authentication.
+Live verification on 2026-09-30 found this free account restricted to seasons
+2022–2024. Current requests fall back to betting-event discovery; historical
+requests with a supported `season` can use API-Sports. This applies even to the
+separate NBA v2 tester on this account, despite broader published plan language.
+Rejected plan requests are cached for 15 minutes without blocking other seasons.
 Week/cursor filters and standings normalization are not supported. Date-based
 game discovery can fall back to betting events, with the reason in metadata;
 this does not fabricate scores or imply complete schedule coverage. Game IDs
