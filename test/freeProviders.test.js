@@ -34,7 +34,7 @@ test('NFL and hockey scores retain true zero, null scheduled scores and unknown 
 });
 function apiProvider(fetcher,fallback=null){const p=new ApiSportsProvider(settings,fallback,fetcher);p.client('NFL').intervalMs=0;return p;}
 test('API-Sports filters UTC date/league, preserves IDs and refuses incorrect event IDs',async()=>{
- const p=apiProvider(async(url)=>url.pathname==='/leagues'?json({response:[{id:1,name:'NFL',country:{name:'USA'},seasons:[{season:2026,current:true}]}]}):json({response:[game(),{...game(),league:{id:2}}, {...game(),game:{...game().game,id:10,date:{timestamp:Date.parse('2026-09-30T01:00Z')/1000}}}]}));
+ const p=apiProvider(async(url)=>{ assert.equal(url.searchParams.has('name'),false);return url.pathname==='/leagues'?json({response:[{id:1,name:'NFL',country:{name:'USA'},seasons:[{season:2026,current:true}]}]}):json({response:[game(),{...game(),league:{id:2}}, {...game(),game:{...game().game,id:10,date:{timestamp:Date.parse('2026-09-30T01:00Z')/1000}}}]});});
  const r=await p.listGames({league:'NFL',date:'2026-09-29'});assert.equal(r.data.length,1);assert.equal(r.data[0].id,'apisports:NFL:9');
  await assert.rejects(p.getGame({league:'NFL',gameId:'sharpApi:9'}),e=>e.status===400);
  await assert.rejects(p.listGames({league:'NFL',date:'2026-02-30'}),e=>e.status===400);
@@ -47,9 +47,9 @@ test('API-Sports access diagnostics whitelist account fields and fallback labels
 });
 const account={api_key:key,current_subscription_id:1,subscriptions:[{subscription_id:1,is_active:true,request_limit:250,request_count:2,sport_ids:[12],bookmakers:{pinnacle:{has_live_odds:false,has_player_props:false,secret:key}}}]};
 const scope={key:'americanfootball_nfl',sportId:12,tournamentId:100};
-const markets=[{marketId:1,marketName:'Moneyline',marketLength:2,sportId:12,period:'fulltime',handicap:0,outcomes:[{outcomeId:11,outcomeName:'1'},{outcomeId:12,outcomeName:'2'}]},
-{marketId:2,marketName:'Handicap',marketLength:2,sportId:12,period:'fulltime',handicap:-3.5,outcomes:[{outcomeId:21,outcomeName:'1'},{outcomeId:22,outcomeName:'2'}]},
-{marketId:3,marketName:'Over Under Full Time',marketLength:2,sportId:12,period:'fulltime',handicap:44.5,outcomes:[{outcomeId:31,outcomeName:'Over'},{outcomeId:32,outcomeName:'Under'}]}];
+const markets=[{marketId:1,marketName:'Winner (incl. overtime)',marketType:'moneyline',marketLength:2,sportId:12,period:'result',handicap:0,outcomes:[{outcomeId:11,outcomeName:'1'},{outcomeId:12,outcomeName:'2'}]},
+{marketId:2,marketName:'Handicap (incl. overtime)',marketType:'spreads',marketLength:2,sportId:12,period:'result',handicap:-3.5,outcomes:[{outcomeId:21,outcomeName:'1'},{outcomeId:22,outcomeName:'2'}]},
+{marketId:3,marketName:'Total (incl. overtime)',marketType:'totals',marketLength:2,sportId:12,period:'result',handicap:44.5,outcomes:[{outcomeId:31,outcomeName:'Over'},{outcomeId:32,outcomeName:'Under'}]}];
 const fixture=()=>({fixtureId:'fixture1',sportId:12,tournamentId:100,statusId:0,startTime:new Date(Date.now()+86400000).toISOString(),participant1Name:'Home',participant2Name:'Away',bookmakerOdds:{pinnacle:{bookmakerIsActive:true,suspended:false,markets:Object.fromEntries(markets.map(m=>[m.marketId,{marketActive:true,outcomes:Object.fromEntries(m.outcomes.map(o=>[o.outcomeId,{players:{'0':{active:true,price:1.91,mainLine:true,playerName:null,changedAt:'2026-09-29T00:00Z'}}}]))}]))}}});
 function oddsProvider(fetcher){const p=new OddsPapiProvider(settings,fetcher);p.client.intervalMs=0;return p;}
 test('OddsPapi access whitelists secrets and refuses unsubscribed books before charged calls',async()=>{
@@ -66,6 +66,8 @@ test('OddsPapi normalizes both sides and signs while excluding inactive, props a
  f.bookmakerOdds.pinnacle.markets[2].outcomes[21].players[0].mainLine=false;
  r=p.normalizeOdds(f,scope,{},bounds,['pinnacle'],markets,['spreads']);assert.equal(r,null);
  assert.equal(p.marketKey({...markets[0],period:'firsthalf'}),null);
+ assert.equal(p.marketKey({...markets[0],period:'fulltime'}),null);
+ assert.equal(p.marketKey({...markets[2],marketType:'teamtotals-team1'}),null);
  assert.equal(p.marketKey({...markets[0],playerProp:true}),null);
  assert.equal(p.marketKey({...markets[0],marketLength:3}),null);
  f.bookmakerOdds.pinnacle.suspended=true;assert.equal(p.normalizeOdds(f,scope,{},bounds,['pinnacle'],markets,['h2h']),null);

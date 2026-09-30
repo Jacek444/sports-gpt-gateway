@@ -22,7 +22,7 @@ export function normalizeApiSportsGame(league, row) {
   const rawStatus = game.status?.short;
   const code = rawStatus === 'NS' ? 'scheduled'
     : ['FT','AOT','AP','AWD'].includes(rawStatus) ? 'final'
-    : ['POST','SUSP','INTR'].includes(rawStatus) ? 'postponed'
+    : ['POST','PST','SUSP','INTR'].includes(rawStatus) ? 'postponed'
     : ['CANC','ABD'].includes(rawStatus) ? 'cancelled'
     : /^(Q[1-4]|P[1-3]|IN\d+|OT|BT|HT|PT|LIVE)$/.test(rawStatus || '') ? 'live' : 'unknown';
   const time = typeof game.date === 'string' ? game.date : game.date?.timestamp ? new Date(game.date.timestamp * 1000).toISOString() : null;
@@ -59,7 +59,7 @@ export class ApiSportsProvider extends BaseProvider {
   }
   async scope(league, season) {
     const name = SCOPES[league]?.[1];
-    const rows = await this.rows(league, '/leagues', { name }, 86400000);
+    const rows = await this.rows(league, '/leagues', SCOPES[league][0] === 'american-football' ? {} : { name }, 86400000);
     const matches = rows.filter(r => (r.league?.name || r.name) === name && ['USA','United States'].includes(r.country?.name));
     if (matches.length !== 1) throw new HttpError(503, `API-Sports could not uniquely resolve ${league}.`);
     const row = matches[0], id = row.league?.id || row.id;
@@ -86,7 +86,7 @@ export class ApiSportsProvider extends BaseProvider {
     const day = date ? dateOnly(date) : season === undefined ? new Date().toISOString().slice(0,10) : undefined;
     try {
       const scope = await this.scope(league, season);
-      const rows = await this.rows(league, '/games', { league: scope.id, date: day, season: season !== undefined ? scope.season : undefined, timezone: 'UTC' }, 60000);
+      const rows = await this.rows(league, '/games', { league: scope.id, date: day, season: scope.season, timezone: 'UTC' }, 60000);
       let games = rows.filter(r => String(r.league?.id) === String(scope.id)).map(r => normalizeApiSportsGame(league,r));
       if (day) games = games.filter(g => new Date(g.start_time).toISOString().slice(0,10) === day);
       if (filter) games = games.filter(g => [g.home_team,g.away_team].some(t => [t.id,t.provider_team_id,t.name].some(v=>String(v).toLowerCase().includes(String(filter).toLowerCase()))));
@@ -95,7 +95,7 @@ export class ApiSportsProvider extends BaseProvider {
     } catch (error) {
       if (!this.fallback || error.status < 500 || season !== undefined) throw error;
       const result = await this.fallback.listGames(params);
-      return { ...result, meta: { ...result.meta, fallback_from: this.name, fallback_reason: error.message } };
+      return { ...result, meta: { ...result.meta, fallback_from: this.name, fallback_reason: error.message, fallback_details: error.details } };
     }
   }
   async getGame({ league, gameId }) {

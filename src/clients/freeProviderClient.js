@@ -56,7 +56,7 @@ export class FreeProviderClient {
         const dailyExhausted = limited && this.quota.daily_remaining === '0';
         const delay = dailyExhausted ? 86400000 - Date.now() % 86400000 : limited ? 60000 : 900000;
         if (limited || restricted) this.blockedUntil = Date.now() + delay;
-        throw new HttpError(503, `${this.name}: ${reason}.`, { provider: this.name, upstreamStatus: limited ? 429 : res.status, reason, retryAfter: Math.ceil(delay / 1000) });
+        throw new HttpError(503, `${this.name}: ${reason}.`, { provider: this.name, fields: Object.keys(body?.errors || {}).filter(k=>['name','league','season','date','timezone','requests','token','rateLimit','plan','endpoint','bug','page'].includes(k)), upstreamStatus: limited ? 429 : res.status, reason, retryAfter: Math.ceil(delay / 1000) });
       }
       if (body === null) throw new HttpError(502, `${this.name} returned invalid JSON.`);
       this.lastSuccessAt = new Date().toISOString(); this.lastReadAt = this.lastSuccessAt; this.lastError = null;
