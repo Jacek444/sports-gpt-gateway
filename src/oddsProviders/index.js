@@ -6,8 +6,10 @@ import { theOddsApiProvider } from './theOddsApiProvider.js';
 import { oddsApiIoProvider } from './oddsApiIoProvider.js';
 import { sportsGameOddsProvider } from './sportsGameOddsProvider.js';
 import { parlayApiProvider } from './parlayApiProvider.js';
+import { sharpApiProvider } from './sharpApiProvider.js';
 
 const providers = {
+  sharpApi: sharpApiProvider,
   theOddsApi: theOddsApiProvider,
   oddsApiIo: oddsApiIoProvider,
   sportsGameOdds: sportsGameOddsProvider,
@@ -269,7 +271,7 @@ function writeCache(
   cache.set(cacheKey, {
     value,
     expiresAt:
-      Date.now() + ttlMs
+      Date.now() + (value?.provider === 'sharpApi' ? Math.max(ttlMs, 60000) : ttlMs)
   });
 }
 

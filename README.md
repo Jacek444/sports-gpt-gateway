@@ -1,5 +1,50 @@
 # Sports GPT Gateway
 
+## SharpAPI Free provider
+
+Set `SHARP_API_KEY` in Render's Environment settings (never in GitHub).
+`SHARP_API_ENABLED` defaults to `true`, but an absent key keeps the provider unavailable.
+The provider name is `sharpApi` in REST and MCP. New default provider orders put
+SharpAPI first. Explicit `ODDS_PROVIDER_ORDER` and `ODDS_SPORTS_PROVIDER_ORDER`
+values remain authoritative: prepend `sharpApi,` to each existing Render value
+if you want to conserve credits on the other providers. Deploy the source before
+verifying `/health` and `/v1/odds/status`.
+
+This adapter supports delayed **pregame** events and odds for NFL, NCAAF, NBA,
+WNBA, NCAAB, MLB and NHL, using DraftKings/FanDuel. It supports `h2h`, `spreads`,
+`totals`, alternate spreads/totals, and exact named `player_*` market IDs shared
+with SharpAPI (excluding ambiguous `player_prop`). Unsupported aliases fail
+explicitly instead of guessing a market. Score, sports-catalogue, other-book,
+non-US, and live-only requests are left to existing providers through normal
+board/discovery fallback. It does not provide complete league schedules,
+injuries, lineups, live scores or historical closing odds.
+
+Responses retain provider identity, quota headers, per-outcome feed timestamps,
+and `meta.data_delay_seconds` (at least 60 seconds on this free-plan adapter).
+Timestamps measure feed refresh, not when a line last moved. Prices still need
+verification at the sportsbook. Main and alternate lines are kept separate;
+player identity is returned as the outcome `description`.
+
+Pagination is followed using event offsets and odds cursors, with a six-page
+budget. Incomplete pagination, empty usable results, missing requested markets,
+malformed responses, prices older than five minutes, timeouts, and rate limits produce errors eligible for
+board/discovery fallback. A local rolling limit permits at most 12 upstream
+requests per minute per process; shared/multiple instances still rely on upstream
+429 handling. Market/book coverage can vary by event even in a successful board.
+Event IDs stay provider-specific: a `sharpApi:` event-odds request stays on
+SharpAPI. If it cannot serve a requested market, rediscover the same matchup on
+another provider rather than sending a SharpAPI ID to that provider.
+
+Use `npm test` for fixture-based verification. Tests never need the production
+SharpAPI key or contact its paid feeds. For deployment verification, request a
+small upcoming slate with `provider=sharpApi`, then one event's `h2h` odds and
+check the teams, time, sportsbook, price and delay. Only then put it first in
+any existing Render provider-order overrides.
+
+References: [SharpAPI odds](https://docs.sharpapi.io/en/api-reference/odds/),
+[events](https://docs.sharpapi.io/en/api-reference/events/),
+[free-plan limits](https://docs.sharpapi.io/en/pricing/).
+
 ## League data without another subscription
 
 If the selected general-data provider has no API key, league game discovery now

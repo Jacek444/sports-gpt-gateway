@@ -110,6 +110,7 @@ function compactEvent(event, providerName) {
     null;
 
   let status =
+    (typeof event.status === 'string' ? event.status : null) ||
     event?.status?.displayLong ||
     event?.status?.displayShort ||
     null;
@@ -195,6 +196,8 @@ function compactEventResponse(result) {
 
     count:
       compactEvents.length,
+
+    ...(result?.meta ? { meta: result.meta } : {}),
 
     quota:
       result?.quota || null,

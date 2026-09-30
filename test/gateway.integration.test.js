@@ -29,7 +29,7 @@ test('HTTP schedule route uses real adapter flow, falls back, and never substitu
     if (url.pathname === '/v1/sports/americanfootball_nfl/events') {
       res.statusCode = secondaryFails ? 503 : 200;
       return res.end(JSON.stringify(secondaryFails ? { error: 'unavailable' } : [{
-        id: 'fixture-parlay', home_team: 'Chicago Bears', away_team: 'Philadelphia Eagles', commence_time: '2026-09-29T00:15:00Z'
+        id: 'fixture-parlay', home_team: 'Chicago Bears', away_team: 'Philadelphia Eagles', commence_time: new Date(Date.now() + 86400000).toISOString()
       }]));
     }
     res.statusCode = 404;
