@@ -1,5 +1,56 @@
 # Sports GPT Gateway
 
+## OddsPapi and API-Sports direct accounts
+
+Save `ODDSPAPI_API_KEY` and `API_SPORTS_API_KEY` in Render, then deploy. Both
+adapters default to enabled when a key is configured. The API-Sports adapter
+uses the direct dashboard key with `x-apisports-key`; RapidAPI keys are not
+interchangeable. No keys belong in this repository or client-side requests.
+
+The default odds order is `sharpApi,oddsPapi,sportsGameOdds,parlayApi,theOddsApi`.
+Explicit Render order overrides still win. OddsPapi reads account entitlements
+before paid-quota requests, uses subscribed books only, caches reference data
+for a day and prices for 60 seconds, and spaces requests by 2.2 seconds. It
+supports pregame discovery and core two-way full-game markets for NFL/NCAAF,
+NBA/NCAAM, MLB and NHL where the subscription and exact catalogue mapping allow
+it. Unsupported markets, sports, books or ambiguous mappings fail into the
+existing discovery/board fallback. Provider-specific event IDs never cross feeds.
+`changedAt` means the price last changed, not a refreshed feed timestamp.
+Props, live odds, standings and injuries are not added by this integration.
+
+API-Sports supplies games, scores and team directories through the existing
+league tools when the selected general-data provider lacks a key. Configured
+provider preferences remain authoritative. To select it explicitly, set
+`DEFAULT_PROVIDER=apisports` and update any `PROVIDER_<LEAGUE>` overrides.
+Basketball, American football, baseball and hockey use their own v1 endpoints;
+league/season IDs are resolved from their catalogues. Dates are UTC. Current
+season access depends on the key's plan and is not implied by authentication.
+Week/cursor filters and standings normalization are not supported. Date-based
+game discovery can fall back to betting events, with the reason in metadata;
+this does not fabricate scores or imply complete schedule coverage. Game IDs
+begin `apisports:<LEAGUE>:`; rediscover odds IDs with the odds-events tool.
+
+API-Sports responses are cached and requests spaced to respect 10/minute per
+sport. HTTP-200 error payloads count as failures. Quota exhaustion produces a
+cooldown (daily exhaustion until UTC midnight); cached responses remain usable.
+Caches and rate guards are per process, so multiple instances still rely on
+upstream limits. Restarting clears caches. Keep polling modest on free plans.
+
+Read-only, field-whitelisted diagnostics (never raw account bodies):
+- `/v1/providers/access?provider=oddsPapi` — allowance and subscribed books/sports.
+- `/v1/providers/access?provider=oddsPapi&sport=NFL` — also resolves scope and
+  public market reference data; initial uncached reference calls use quota.
+- `/v1/providers/access?provider=apisports&league=NFL` — active plan and daily
+  usage for that sport. API-Sports status and OddsPapi account calls are unmetered.
+
+`npm test` uses fixtures, never production keys. After deploy, check access,
+then a small actual game/event request and one market request. A successful
+health response or key check alone does not establish data coverage.
+
+References: [OddsPapi v4](https://oddspapi.io/en/docs),
+[quota](https://oddspapi.io/en/docs/requests-and-quota),
+[API-Sports](https://api-sports.io/documentation/basketball/v1).
+
 ## SharpAPI Free provider
 
 Set `SHARP_API_KEY` in Render's Environment settings (never in GitHub).
@@ -50,7 +101,7 @@ References: [SharpAPI odds](https://docs.sharpapi.io/en/api-reference/odds/),
 ## League data without another subscription
 
 If the selected general-data provider has no API key, league game discovery now
-uses the existing odds gateway and its configured provider fallback order. You
+tries configured API-Sports, then the existing odds gateway and its fallback order. You
 can also explicitly select `DEFAULT_PROVIDER=odds` or `PROVIDER_NFL=odds`.
 This returns betting events, **not a complete league schedule**. Empty results
 do not establish that no games exist, scores remain null, and pagination/coverage

@@ -3,9 +3,13 @@ import { HttpError } from '../errors.js';
 import { MockProvider } from './mockProvider.js';
 import { BallDontLieProvider } from './ballDontLieProvider.js';
 import { SportsDataIoProvider } from './sportsDataIoProvider.js';
+import { ApiSportsProvider } from './apiSportsProvider.js';
 import { OddsScheduleProvider } from './oddsScheduleProvider.js';
 
+export const apiSportsProvider = new ApiSportsProvider(config.apiSports, new OddsScheduleProvider());
+
 const providers = {
+  apisports: apiSportsProvider,
   mock: new MockProvider(),
   odds: new OddsScheduleProvider(),
   balldontlie: new BallDontLieProvider(config.ballDontLie),
@@ -23,6 +27,7 @@ function isConfigured(name) {
       return entry?.enabled && hasKey(entry.apiKey);
     });
   }
+  if (name === 'apisports') return config.apiSports.enabled && hasKey(config.apiSports.apiKey);
   if (name === 'balldontlie') {
     return hasKey(config.ballDontLie.apiKey);
   }
@@ -45,6 +50,7 @@ export function getProviderNameForLeague(league) {
   if (isConfigured(preferred)) {
     return preferred;
   }
+  if (isConfigured('apisports')) return 'apisports';
   if (config.allowMockData && config.mockWhenUnconfigured) {
     return 'mock';
   }
@@ -62,7 +68,7 @@ export function getLeagueProviderStatus() {
         : provider === 'mock' ? 'test_data'
         : provider === 'sportsdataio' ? 'not_implemented'
         : configured ? 'configured_not_probed' : 'unavailable',
-      capabilities: provider === 'odds' ? ['betting_events']
+      capabilities: provider === 'apisports' ? ['games', 'scores', 'teams'] : provider === 'odds' ? ['betting_events']
         : provider === 'balldontlie' ? ['games', 'teams', 'standings'] : [],
       note: provider === 'odds'
         ? 'Betting-event coverage only; not a complete league schedule. Teams, standings and detailed game state require a general-data provider.'
@@ -71,7 +77,8 @@ export function getLeagueProviderStatus() {
   }));
 }
 
-export function getProviderForLeague(league) {
+export function getProviderForLeague(league, gameId) {
+  if (String(gameId || "").startsWith("apisports:")) return apiSportsProvider;
   const name = getProviderNameForLeague(league);
   const provider = providers[name];
   if (!provider) {

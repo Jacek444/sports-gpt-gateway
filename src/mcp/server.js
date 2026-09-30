@@ -14,6 +14,7 @@ const leagueSchema = z.enum([
 
 const providerSchema = z.enum([
   'sharpApi',
+  'oddsPapi',
   'sportsGameOdds',
   'parlayApi',
   'theOddsApi',

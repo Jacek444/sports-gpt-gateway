@@ -144,6 +144,7 @@ paths:
               - theOddsApi
               - oddsApiIo
               - sharpApi
+              - oddsPapi
         - in: query
           name: all
           required: false
@@ -163,7 +164,7 @@ paths:
       summary: Get the current odds board for a sport
       description: >
         Uses the normal SharpBet provider chain unless a provider override
-        is supplied. Current default order is SportsGameOdds, then ParlayAPI,
+        is supplied. Current default order is SharpAPI, OddsPapi, SportsGameOdds, then ParlayAPI,
         then The Odds API.
       parameters:
         - in: path
@@ -187,6 +188,7 @@ paths:
               - theOddsApi
               - oddsApiIo
               - sharpApi
+              - oddsPapi
 
         - in: query
           name: regions
@@ -286,6 +288,7 @@ paths:
               - theOddsApi
               - oddsApiIo
               - sharpApi
+              - oddsPapi
 
         - in: query
           name: daysFrom
@@ -345,6 +348,7 @@ paths:
               - theOddsApi
               - oddsApiIo
               - sharpApi
+              - oddsPapi
 
         - in: query
           name: dateFormat
@@ -415,6 +419,7 @@ paths:
               - theOddsApi
               - oddsApiIo
               - sharpApi
+              - oddsPapi
 
         - in: query
           name: regions

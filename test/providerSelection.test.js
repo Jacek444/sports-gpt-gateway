@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 function inspect(overrides = {}) {
   const env = { ...process.env, DOTENV_CONFIG_PATH: '/nonexistent-sharpbet-test-env',
     NODE_ENV: 'production', DEFAULT_PROVIDER: 'balldontlie',
-    BALLDONTLIE_API_KEY: '', SPORTSDATAIO_API_KEY: '',
+    API_SPORTS_API_KEY: '', BALLDONTLIE_API_KEY: '', SPORTSDATAIO_API_KEY: '',
     MOCK_WHEN_UNCONFIGURED: '', ALLOW_MOCK_DATA: '',
     SPORTSGAMEODDS_ENABLED: 'true', SPORTSGAMEODDS_API_KEY: 'test-key',
     PARLAY_API_ENABLED: 'false', THE_ODDS_API_ENABLED: 'false',
@@ -53,4 +53,11 @@ test('unfinished and unknown adapters are not reported ready', () => {
   const unknown = inspect({ DEFAULT_PROVIDER: 'typo' });
   assert.equal(unknown.status.NFL.status, 'unknown_provider');
   assert.equal(unknown.status.NFL.configured, false);
+});
+
+ test('API-Sports supplies missing general data but respects configured preferences', () => {
+ const result = inspect({API_SPORTS_API_KEY:'test-key', PROVIDER_NFL:'odds'});
+ assert.equal(result.defaults.NBA,'apisports'); assert.equal(result.defaults.NFL,'odds');
+ assert.deepEqual(result.status.NBA.capabilities,['games','scores','teams']);
+ assert.equal(inspect({API_SPORTS_API_KEY:'test-key', API_SPORTS_ENABLED:'false'}).defaults.NBA,'odds');
 });

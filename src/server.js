@@ -1,9 +1,10 @@
 import express from 'express';
 import { toNodeHandler } from '@modelcontextprotocol/node';
 import { config } from './config.js';
-import { toErrorResponse } from './errors.js';
+import { oddsPapiProvider } from './oddsProviders/oddsPapiProvider.js';
+import { HttpError, toErrorResponse } from './errors.js';
 import { LEAGUE_DEFINITIONS, assertLeagueCode } from './leagues.js';
-import { getProviderDefaults, getProviderForLeague, getLeagueProviderStatus } from './providers/index.js';
+import { getProviderDefaults, getProviderForLeague, getLeagueProviderStatus, apiSportsProvider } from './providers/index.js';
 import { getOddsProviderStatus } from './oddsProviders/index.js';
 import { logsRouter } from './routes/logs.js';
 import { oddsApiRouter } from './routes/oddsApi.js';
@@ -29,6 +30,15 @@ app.get('/health', (req, res) => {
     league_data: getLeagueProviderStatus(),
     odds: getOddsProviderStatus()
   });
+});
+
+// Fixed read-only diagnostics: never expose raw account responses or API keys.
+app.get('/v1/providers/access', async (req, res, next) => {
+  try {
+    if (req.query.provider === 'apisports') return res.json(await apiSportsProvider.getAccess(assertLeagueCode(req.query.league)));
+    if (req.query.provider === 'oddsPapi') return res.json(await oddsPapiProvider.getAccess(req.query.sport));
+    throw new HttpError(400, 'provider must be apisports or oddsPapi.');
+  } catch (error) { next(error); }
 });
 
 app.get('/v1/leagues', (req, res) => {
@@ -60,7 +70,7 @@ app.get('/v1/games', async (req, res, next) => {
 app.get('/v1/games/:league/:gameId', async (req, res, next) => {
   try {
     const league = assertLeagueCode(req.params.league);
-    const provider = getProviderForLeague(league);
+    const provider = getProviderForLeague(league, req.params.gameId);
     const result = await provider.getGame({
       league,
       gameId: req.params.gameId

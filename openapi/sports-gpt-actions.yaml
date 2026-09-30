@@ -517,7 +517,7 @@ paths:
       operationId: getOddsBoard
       summary: Get the current odds board for a sport
       description: 'Uses the normal SharpBet provider chain unless a provider override is supplied. Current
-        default order is SportsGameOdds, then ParlayAPI, then The Odds API.
+        default order is SharpAPI, OddsPapi, SportsGameOdds, ParlayAPI, then The Odds API.
 
         '
       parameters:
