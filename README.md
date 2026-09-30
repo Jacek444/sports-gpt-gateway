@@ -3,8 +3,8 @@
 ## BALLDON'T LIE league data
 
 Save `BALLDONTLIE_API_KEY` in Render and deploy. With the default configuration,
-league requests try BALLDON'T LIE, API-Sports when configured, then the existing
-odds-event discovery chain. Explicit provider preferences still win. An upstream
+league requests try BALLDON'T LIE, MoneyLine, API-Sports when configured, then
+the odds-event discovery chain and limited TheSportsDB fallback. Explicit provider preferences still win. An upstream
 failure, plan restriction or request limit can trigger discovery fallback;
 valid empty results are preserved. Responses retain their actual source and
 fallback reasons. Season/week requests never silently become current odds events.
@@ -38,6 +38,58 @@ References: [NBA access tiers](https://nba.balldontlie.io/),
 [NHL access tiers](https://nhl.balldontlie.io/),
 [Account API](https://www.balldontlie.io/account/).
 
+## MoneyLine and TheSportsDB free v1
+
+Render variables: `MONEY_LINE_API` is the user's MoneyLine key (the existing
+variable spelling is intentional); `THESPORTSDB_API_KEY=123` uses TheSportsDB's
+shared public free v1 key. Both adapters enable when their key is present.
+`MONEYLINE_ENABLED=false` or `THESPORTSDB_ENABLED=false` disables one. Keys stay
+on the server; upstream messages and URL credentials are not reflected in errors.
+TheSportsDB v2 is not used because this account has the free key.
+
+With default preferences, general-data discovery uses BALLDON'T LIE, MoneyLine,
+API-Sports, the existing odds-events chain, then TheSportsDB as a limited final
+fallback. Teams skip the odds-only source. Game detail IDs stay with their source.
+MoneyLine supports date-based games, scores and team directories; its IDs start
+`moneyline:<LEAGUE>:`. `moneyline:<page>` cursors preserve pagination. TBA start
+times remain null and stub events are identified. Season/week game filters and
+standings normalization are not implemented for these two adapters.
+
+MoneyLine is also third in the default odds order after SharpAPI and OddsPapi.
+Existing Render order overrides remain authoritative. The initial odds adapter
+supports US DraftKings/FanDuel pregame `h2h`, `spreads` and `totals` across the six
+gateway leagues. Events join odds by exact provider ID. Only explicit sportsbook,
+priceable, non-alternate markets with both sides and a refresh within five minutes
+are accepted. DFS, exchanges, derived fair prices, stale lines and ambiguous
+market pairs are excluded. Props/live prices use existing providers. Discovery
+and board pagination stop after three pages per endpoint and fail if incomplete.
+Event-odds IDs are `moneyline:<eventId>`; discover them with the odds-events tool.
+
+MoneyLine free has 1,000 shared account credits/month and 10 requests/minute.
+Standard data calls cost one credit; this adapter never calls MoneyLine AI.
+The local guard allows 10 misses/minute, caches data for 60 seconds and team
+catalogues for a day. Monthly remaining credits are unknown: local request counts
+are not the account quota. Quota errors trigger cooldowns. Guards and caches are
+per process and reset on restart; multiple instances share the account allowance.
+
+TheSportsDB free v1 provides capped date schedules (up to 3 events), team lists
+(up to 10 teams) and individual game lookups. Catalogues resolve league IDs from
+exact league name and sport matches. Metadata always marks free discovery partial;
+an empty result is not proof that no games or teams exist. It supplies no odds.
+Requests are limited locally to 30/minute, schedule/game results cached for five
+minutes and team catalogues for a day. Unknown game status is preserved even if
+the provider supplies a score. Numeric round values are not evidence of completion.
+
+Read-only diagnostics `/v1/providers/access?provider=moneyline&league=NFL` and
+`/v1/providers/access?provider=thesportsdb&league=NFL` verify team access and return
+counts plus safe runtime metadata. These calls use provider quota. `/health`
+reports configuration without making upstream calls.
+
+References: [MoneyLine contract](https://www.moneylineapp.com/openapi.json),
+[MoneyLine limits](https://www.moneylineapp.com/docs/rate-limits),
+[TheSportsDB v1 contract](https://www.thesportsdb.com/api/spec/v1/openapi.yaml),
+[TheSportsDB access and limits](https://www.thesportsdb.com/documentation).
+
 ## OddsPapi and API-Sports direct accounts
 
 Save `ODDSPAPI_API_KEY` and `API_SPORTS_API_KEY` in Render, then deploy. Both
@@ -45,7 +97,7 @@ adapters default to enabled when a key is configured. The API-Sports adapter
 uses the direct dashboard key with `x-apisports-key`; RapidAPI keys are not
 interchangeable. No keys belong in this repository or client-side requests.
 
-The default odds order is `sharpApi,oddsPapi,sportsGameOdds,parlayApi,theOddsApi`.
+The default odds order is `sharpApi,oddsPapi,moneyline,sportsGameOdds,parlayApi,theOddsApi`.
 Explicit Render order overrides still win. OddsPapi reads account entitlements
 before paid-quota requests, uses subscribed books only, caches reference data
 for a day and prices for 60 seconds, and spaces requests by 2.2 seconds. It

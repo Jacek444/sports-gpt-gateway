@@ -17,6 +17,9 @@ export class LeagueDataChain {
       if(name==='odds' && (method!=='listGames'||params.season!==undefined||params.week!==undefined||params.cursor))continue;
       if(name==='apisports' && method==='getStandings')continue;
       if(name==='apisports' && (params.week!==undefined||params.cursor))continue;
+      if(['moneyline','thesportsdb'].includes(name) && method==='getStandings')continue;
+      if(['moneyline','thesportsdb'].includes(name) && (params.season!==undefined||params.week!==undefined))continue;
+      if(name==='thesportsdb' && params.cursor)continue;
       try {
         const result=await provider[method](params);
         return {...result,provider:result.provider||name,meta:{...result.meta,...(errors.length?{fallback_from:errors[0].provider,fallback_attempts:errors}: {})}};

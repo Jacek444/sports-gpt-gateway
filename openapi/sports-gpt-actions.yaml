@@ -499,6 +499,9 @@ paths:
           - parlayApi
           - theOddsApi
           - oddsApiIo
+          - sharpApi
+          - oddsPapi
+          - moneyline
       - in: query
         name: all
         required: false
@@ -540,6 +543,9 @@ paths:
           - parlayApi
           - theOddsApi
           - oddsApiIo
+          - sharpApi
+          - oddsPapi
+          - moneyline
       - in: query
         name: regions
         required: false
@@ -627,6 +633,9 @@ paths:
           - parlayApi
           - theOddsApi
           - oddsApiIo
+          - sharpApi
+          - oddsPapi
+          - moneyline
       - in: query
         name: daysFrom
         required: false
@@ -680,6 +689,9 @@ paths:
           - parlayApi
           - theOddsApi
           - oddsApiIo
+          - sharpApi
+          - oddsPapi
+          - moneyline
       - in: query
         name: dateFormat
         required: false
@@ -1379,6 +1391,9 @@ paths:
           - parlayApi
           - theOddsApi
           - oddsApiIo
+          - sharpApi
+          - oddsPapi
+          - moneyline
       - in: query
         name: regions
         required: false

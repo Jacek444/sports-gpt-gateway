@@ -145,6 +145,7 @@ paths:
               - oddsApiIo
               - sharpApi
               - oddsPapi
+              - moneyline
         - in: query
           name: all
           required: false
@@ -189,6 +190,7 @@ paths:
               - oddsApiIo
               - sharpApi
               - oddsPapi
+              - moneyline
 
         - in: query
           name: regions
@@ -289,6 +291,7 @@ paths:
               - oddsApiIo
               - sharpApi
               - oddsPapi
+              - moneyline
 
         - in: query
           name: daysFrom
@@ -349,6 +352,7 @@ paths:
               - oddsApiIo
               - sharpApi
               - oddsPapi
+              - moneyline
 
         - in: query
           name: dateFormat
@@ -420,6 +424,7 @@ paths:
               - oddsApiIo
               - sharpApi
               - oddsPapi
+              - moneyline
 
         - in: query
           name: regions
