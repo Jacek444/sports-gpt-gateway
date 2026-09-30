@@ -22,8 +22,8 @@ test('SharpAPI works through HTTP with cache, compact metadata, event IDs, fallb
       }
       res.setHeader('X-Data-Delay', '60');
       res.setHeader('X-RateLimit-Remaining', '10');
-      const event = { id: 'game', league: 'nba', home_team: 'Home', away_team: 'Away', start_time: start, status: 'upcoming' };
-      const data = url.pathname === '/api/v1/events' ? [event] : [{
+      assert.equal(url.pathname, '/api/v1/odds');
+      const data = [{
         event_id: 'game', league: 'nba', home_team: 'Home', away_team: 'Away', event_start_time: start,
         market_type: 'moneyline', sportsbook: 'draftkings', selection: 'Home', odds_american: -120,
         odds_decimal: 1.833333, timestamp: new Date().toISOString(), is_live: false, is_main_line: true

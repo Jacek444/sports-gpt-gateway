@@ -129,12 +129,11 @@ async function call(path, params) {
 async function pages(path, params) {
   const rows = [];
   let cursor;
-  let offset = 0;
   let last;
   let delay = 60;
   const seen = new Set();
   for (let page = 0; page < MAX_PAGES; page++) {
-    last = await call(path, { ...params, limit: PAGE_SIZE, ...(cursor ? { cursor } : { offset }) });
+    last = await call(path, { ...params, limit: PAGE_SIZE, ...(cursor ? { cursor } : {}) });
     rows.push(...last.body.data);
     delay = Math.max(delay, last.delay);
     const pagination = last.body.pagination;
@@ -142,16 +141,12 @@ async function pages(path, params) {
       throw unavailable('SharpAPI pagination is missing; refusing a possibly incomplete response.');
     }
     if (!pagination.has_more) return { rows, quota: last.quota, delay };
-    const next = path === 'odds' ? pagination.next_cursor : pagination.next_offset;
+    const next = pagination.next_cursor;
     if (next === undefined || next === null || next === '' || seen.has(String(next))) {
       throw unavailable('SharpAPI pagination could not be completed.');
     }
     seen.add(String(next));
-    if (path === 'odds') cursor = next;
-    else {
-      if (!Number.isInteger(next) || next <= offset) throw unavailable('SharpAPI returned an invalid next offset.');
-      offset = next;
-    }
+    cursor = next;
   }
   throw unavailable('SharpAPI response exceeds the free-plan page budget; narrow the request or use another provider.');
 }
@@ -166,23 +161,13 @@ function envelope(data, source, extra = {}) {
 }
 
 async function getEvents(sport, params = {}) {
-  const league = leagueFor(sport);
-  const bounds = validateParams(params);
-  const source = await pages('events', { league, status: 'upcoming', live: false, sportsbook: params.bookmakers });
-  const events = new Map();
-  for (const row of source.rows) {
-    if (row.is_live || row.status === 'live' || row.status === 'final') continue;
-    if (!row.id || !row.home_team || !row.away_team || !Number.isFinite(Date.parse(row.start_time))) {
-      throw unavailable('SharpAPI returned an incomplete event.');
-    }
-    if (row.league && row.league !== league) continue;
-    if (!inWindow(row.start_time, bounds) || Date.parse(row.start_time) <= Date.now()) continue;
-    events.set(row.id, { id: row.id, provider_event_id: row.id, sport_key: sport,
-      home_team: row.home_team, away_team: row.away_team,
-      commence_time: formatTime(row.start_time, params), status: 'Upcoming' });
-  }
-  if (!events.size) throw unavailable('SharpAPI has no matching pregame events; try another provider.');
-  return envelope([...events.values()], source);
+  // The upstream event catalogue can include a very large futures inventory.
+  // Discover playable matchups from the much smaller pregame moneyline feed.
+  const result = await getOdds(sport, { ...params, markets: 'h2h' });
+  return { ...result,
+    data: result.data.map(({ bookmakers, ...event }) => ({ ...event, status: 'Upcoming' })),
+    meta: { ...result.meta, discovery_source: 'pregame_moneyline_odds' }
+  };
 }
 
 async function getOdds(sport, params = {}, eventId = null) {
@@ -195,7 +180,7 @@ async function getOdds(sport, params = {}, eventId = null) {
   const alternateOnly = plan.every((p) => p.alternate);
   const source = await pages('odds', { league,
     market: [...new Set(plan.map((p) => p.type))].join(','),
-    sportsbook: params.bookmakers, event_id: eventId || params.eventIds,
+    sportsbook: requestedBooks.join(','), event_id: eventId || params.eventIds,
     is_live: false, ...(coreOnly ? { is_main_line: true } : {}),
     ...(alternateOnly ? { is_alternate_line: true } : {})
   });
