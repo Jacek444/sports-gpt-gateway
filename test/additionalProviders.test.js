@@ -66,7 +66,7 @@ test('MoneyLine game/teams flow preserves page cursors, filters and canonical me
 
 function moneyOdds(fetcher){return new MoneylineOddsProvider(new MoneylineProvider(settings,{fetcher,now:()=>now}),()=>now);}
 test('MoneyLine joins events by ID, honors sportsbook identity and never uses aggregate fair odds',async()=>{
-  let calls=0;const p=moneyOdds(async u=>{calls++;return u.pathname==='/v1/events'?json({success:true,data:[event],meta:{pages:1}}):json({success:true,data:[{...odds,summary:{fairOdds:9000}}],meta:{pages:1}});});
+  let calls=0;const p=moneyOdds(async u=>{calls++;return u.pathname==='/v1/events'?json({success:true,data:[event],meta:{pages:1}}):json({success:true,data:{...odds,summary:{fairOdds:9000}}});});
   const r=await p.getOddsBoard('NFL',{markets:'h2h'});assert.equal(r.data[0].gateway_event_id,'moneyline:nfl-ev-42');
   assert.equal(r.data[0].bookmakers[0].markets[0].outcomes[0].name,'Home');assert.equal(r.data[0].bookmakers[0].markets[0].outcomes[0].price,-120);
   await p.getOddsBoard('NFL',{markets:'h2h'});assert.equal(calls,2);
@@ -95,6 +95,16 @@ test('MoneyLine spreads/totals require compatible paired points and preserve dec
 test('MoneyLine refuses unfinished pagination before reporting a complete board',async()=>{
   const p=moneyOdds(async()=>json({success:true,data:[event],meta:{pages:99}}));
   await assert.rejects(p.getEvents('NFL'),e=>e.status===503&&/pagination/.test(e.message));
+});
+
+test('MoneyLine free-budget board requests at most four event prices and labels partial coverage',async()=>{
+  const ids=[];
+  const p=moneyOdds(async u=>{
+    if(u.pathname==='/v1/events')return json({success:true,data:Array.from({length:6},(_,i)=>({...event,eventId:`nfl-${i}`})),meta:{pages:1}});
+    const id=u.pathname.split('/').at(-2);ids.push(id);return json({success:true,data:{...odds,eventId:id}});
+  });
+  const r=await p.getOddsBoard('NFL',{markets:'h2h'});assert.equal(ids.length,4);assert.equal(r.meta.truncated,true);assert.equal(r.meta.events_discovered,6);
+  await assert.rejects(p.getOddsBoard('NFL',{markets:'h2h',eventIds:'missing'}));
 });
 
 test('TheSportsDB free v1 uses league IDs and marks the capped schedule/directory partial',async()=>{

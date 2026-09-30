@@ -61,8 +61,9 @@ supports US DraftKings/FanDuel pregame `h2h`, `spreads` and `totals` across the 
 gateway leagues. Events join odds by exact provider ID. Only explicit sportsbook,
 priceable, non-alternate markets with both sides and a refresh within five minutes
 are accepted. DFS, exchanges, derived fair prices, stale lines and ambiguous
-market pairs are excluded. Props/live prices use existing providers. Discovery
-and board pagination stop after three pages per endpoint and fail if incomplete.
+market pairs are excluded. Props/live prices use existing providers. Event discovery stops after three pages and fails if incomplete. The free-budget
+odds board queries at most four earliest upcoming events and marks the partial
+coverage; request event-specific odds for another matchup.
 Event-odds IDs are `moneyline:<eventId>`; discover them with the odds-events tool.
 
 MoneyLine free has 1,000 shared account credits/month and 10 requests/minute.
