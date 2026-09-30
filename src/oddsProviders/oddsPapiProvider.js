@@ -46,12 +46,13 @@ export class OddsPapiProvider {
       result.scope=await this.scope(sport);
       const catalogue=await this.catalogue(result.scope);
       const unique=new Map();
-      for (const m of catalogue.filter(m=>!m.playerProp)) {
+      for (const m of catalogue.filter(m=>!m.playerProp && ['moneyline','spreads','totals','1x2'].includes(m.marketType) && ['result','fulltime'].includes(m.period))) {
         const k=JSON.stringify([m.marketName,m.marketType,m.period]);
         if (!unique.has(k)) unique.set(k,{id:m.marketId,name:m.marketName,type:m.marketType,period:m.period,length:m.marketLength,handicap:m.handicap,outcomes:m.outcomes});
       }
       result.market_reference=[...unique.values()].slice(0,60);
     }
+    result.remaining=this.subscription.remaining;
     return result;
   }
   async scope(sport) {
@@ -114,13 +115,16 @@ export class OddsPapiProvider {
   // Deliberately exact: never label DNB, half/period or three-way regulation
   // results as the gateway's two-way full-game moneyline.
   marketKey(m) {
-    const name=String(m.marketName || '').toLowerCase();
-    if (m.playerProp || !['fulltime','including-overtime','inclovertime'].includes(String(m.period).toLowerCase())) return null;
-    if (m.marketLength!==2) return null;
-    if (['moneyline','money line','winner (incl. overtime)','winner incl. overtime','full time winner','match winner','winner'].includes(name)) return 'h2h';
-    if (['asian handicap','handicap','point spread','spread','run line','puck line','handicap (incl. overtime)'].includes(name)) return 'spreads';
-    if (['over under full time','over/under','total points','total runs','total goals','totals','total (incl. overtime)'].includes(name)) return 'totals';
-    return null;
+    // Live v4 catalogue: result includes overtime (and MLB extra innings).
+    // NHL fulltime is regulation-only and must never be relabelled as h2h.
+    if (m.playerProp || m.period !== 'result' || m.marketLength !== 2) return null;
+    const names = {
+      moneyline: ['Winner (incl. overtime)', 'Winner (incl. overtime and penalties)', 'Winner (incl. extra innings)'],
+      spreads: ['Handicap (incl. overtime)', 'Handicap (incl. overtime and penalties)', 'Handicap (incl. extra innings)'],
+      totals: ['Total (incl. overtime)', 'Over Under (incl. overtime)', 'Total (incl. overtime and penalties)', 'Over Under (incl. extra innings)']
+    };
+    if (!names[m.marketType]?.includes(m.marketName)) return null;
+    return m.marketType === 'moneyline' ? 'h2h' : m.marketType;
   }
   normalizeOdds(row,scope,params,bounds,books,catalogue,markets) {
     const event=this.event(row,scope,params,bounds); if (!event) return null;
