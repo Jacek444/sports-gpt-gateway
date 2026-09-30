@@ -4,7 +4,6 @@ import { config } from '../src/config.js';
 
 let sequence = 0;
 const future = '2099-09-30T20:00:00Z';
-const event = { id: 'canonical-game', league: 'nba', home_team: 'Home', away_team: 'Away', start_time: future, status: 'upcoming', is_live: false };
 const odd = { event_id: 'canonical-game', league: 'nba', home_team: 'Home', away_team: 'Away', event_start_time: future,
   market_type: 'moneyline', sportsbook: 'draftkings', selection: 'Home', odds_american: -120, odds_decimal: 1.833333,
   line: null, timestamp: new Date(Date.now() - 60000).toISOString(), is_main_line: true, is_alternate_line: false, is_live: false, is_active: true };
@@ -20,21 +19,25 @@ async function setup(t, handler) {
   return { api: sharpApiProvider, calls };
 }
 
-test('uses header authentication, follows event pages, deduplicates and enforces exact UTC bounds', async (t) => {
+test('uses header authentication, discovers playable events through odds pages, deduplicates and enforces exact UTC bounds', async (t) => {
   const { api, calls } = await setup(t, (url, options, n) => n === 1
-    ? response(payload([event, { ...event, id: 'outside', start_time: '2099-10-01T01:00:00Z' }], { has_more: true, next_offset: 200 }))
-    : response(payload([event, { ...event, id: 'live', is_live: true }])));
+    ? response(payload([odd, { ...odd, event_id: 'outside', event_start_time: '2099-10-01T01:00:00Z' }], { has_more: true, next_cursor: 'page2' }))
+    : response(payload([odd, { ...odd, event_id: 'live', is_live: true }])));
   const result = await api.getEvents('basketball_nba', { commenceTimeFrom: '2099-09-30T00:00:00Z', commenceTimeTo: '2099-09-30T23:59:59Z' });
   assert.equal(result.data.length, 1);
-  assert.equal(result.data[0].provider_event_id, event.id);
+  assert.equal(result.data[0].provider_event_id, odd.event_id);
   assert.equal(result.meta.complete_schedule, false);
   assert.equal(result.meta.data_delay_seconds, 60);
   assert.equal(result.quota.remaining, '11');
-  assert.equal(calls[1].url.searchParams.get('offset'), '200');
+  assert.equal(calls[1].url.searchParams.get('cursor'), 'page2');
   assert.equal(calls[0].options.headers['X-API-Key'], 'test-secret-never-print');
   assert.equal(calls[0].url.href.includes('test-secret'), false);
   assert.equal(calls[0].url.searchParams.get('league'), 'nba');
-  assert.equal(calls[0].url.searchParams.get('status'), 'upcoming');
+  assert.equal(calls[0].url.pathname, '/api/v1/odds');
+  assert.equal(calls[0].url.searchParams.get('market'), 'moneyline');
+  assert.equal(calls[0].url.searchParams.get('sportsbook'), 'draftkings,fanduel');
+  assert.equal(result.meta.discovery_source, 'pregame_moneyline_odds');
+  assert.equal(result.data[0].bookmakers, undefined);
 });
 
 test('cursor pagination builds bookmaker markets and preserves side, line, player and timestamp', async (t) => {
@@ -98,7 +101,7 @@ test('unsupported books, regions, live calls, market aliases and scores consume 
 });
 
 test('partial or looping pagination never escapes as a full slate', async (t) => {
-  const { api } = await setup(t, () => response(payload([event], { has_more: true, next_offset: 200 })));
+  const { api } = await setup(t, () => response(payload([odd], { has_more: true, next_cursor: 'page2' })));
   await assert.rejects(api.getEvents('NBA'), /pagination/);
 });
 
@@ -124,19 +127,19 @@ test('warming, invalid response and missing pagination fail explicitly', async (
   await assert.rejects(api.getEvents('NBA'), /not ready/);
   body = { data: 'bad' };
   await assert.rejects(api.getEvents('NBA'), /invalid data/);
-  body = { data: [event] };
+  body = { data: [odd] };
   await assert.rejects(api.getEvents('NBA'), /pagination/);
 });
 
 test('local rolling quota prevents a thirteenth upstream request', async (t) => {
-  const { api, calls } = await setup(t, () => response(payload([event])));
+  const { api, calls } = await setup(t, () => response(payload([odd])));
   for (let n = 0; n < 12; n++) await api.getEvents('NBA');
   await assert.rejects(api.getEvents('NBA'), (error) => error.details.upstreamStatus === 429);
   assert.equal(calls.length, 12);
 });
 
 test('invalid windows and missing configuration consume no upstream requests', async (t) => {
-  const { api, calls } = await setup(t, () => response(payload([event])));
+  const { api, calls } = await setup(t, () => response(payload([odd])));
   await assert.rejects(api.getEvents('NBA', { commenceTimeFrom: 'invalid' }), /Invalid commence/);
   config.oddsProviders.sharpApi.apiKey = '';
   await assert.rejects(api.getEvents('NBA'), /not configured/);

@@ -25,7 +25,9 @@ Timestamps measure feed refresh, not when a line last moved. Prices still need
 verification at the sportsbook. Main and alternate lines are kept separate;
 player identity is returned as the outcome `description`.
 
-Pagination is followed using event offsets and odds cursors, with a six-page
+Game discovery uses the pregame moneyline feed, avoiding the large upstream
+event catalogue. Only matchups with usable moneyline prices are discovered.
+Pagination is followed using odds cursors, with a six-page
 budget. Incomplete pagination, empty usable results, missing requested markets,
 malformed responses, prices older than five minutes, timeouts, and rate limits produce errors eligible for
 board/discovery fallback. A local rolling limit permits at most 12 upstream
