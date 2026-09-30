@@ -33,7 +33,23 @@ export const config = {
     baseUrl: env('API_SPORTS_BASE_URL', '')
   },
 
+  moneyline: {
+    apiKey: env('MONEY_LINE_API'),
+    enabled: envBool('MONEYLINE_ENABLED', true),
+    baseUrl: env('MONEYLINE_BASE_URL', 'https://mlapi.bet/v1')
+  },
+  theSportsDb: {
+    apiKey: env('THESPORTSDB_API_KEY'),
+    enabled: envBool('THESPORTSDB_ENABLED', true),
+    baseUrl: env('THESPORTSDB_BASE_URL', 'https://www.thesportsdb.com/api/v1/json')
+  },
+
   oddsProviders: {
+    moneyline: {
+      apiKey: env('MONEY_LINE_API'),
+      enabled: envBool('MONEYLINE_ENABLED', true),
+      baseUrl: env('MONEYLINE_BASE_URL', 'https://mlapi.bet/v1')
+    },
     oddsPapi: {
       enabled: envBool('ODDSPAPI_ENABLED', true),
       apiKey: env('ODDSPAPI_API_KEY'),
@@ -74,7 +90,7 @@ export const config = {
 
   oddsProviderOrder: env(
     'ODDS_PROVIDER_ORDER',
-    'sharpApi,oddsPapi,sportsGameOdds,parlayApi,theOddsApi'
+    'sharpApi,oddsPapi,moneyline,sportsGameOdds,parlayApi,theOddsApi'
   )
     .split(',')
     .map((name) => name.trim())

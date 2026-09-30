@@ -8,8 +8,10 @@ import { sportsGameOddsProvider } from './sportsGameOddsProvider.js';
 import { parlayApiProvider } from './parlayApiProvider.js';
 import { oddsPapiProvider } from './oddsPapiProvider.js';
 import { sharpApiProvider } from './sharpApiProvider.js';
+import { moneylineOddsProvider } from './moneylineOddsProvider.js';
 
 const providers = {
+  moneyline: moneylineOddsProvider,
   oddsPapi: oddsPapiProvider,
   sharpApi: sharpApiProvider,
   theOddsApi: theOddsApiProvider,

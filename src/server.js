@@ -4,7 +4,7 @@ import { config } from './config.js';
 import { oddsPapiProvider } from './oddsProviders/oddsPapiProvider.js';
 import { HttpError, toErrorResponse } from './errors.js';
 import { LEAGUE_DEFINITIONS, assertLeagueCode } from './leagues.js';
-import { getProviderDefaults, getProviderForLeague, getLeagueProviderStatus, apiSportsProvider, ballDontLieProvider } from './providers/index.js';
+import { getProviderDefaults, getProviderForLeague, getLeagueProviderStatus, apiSportsProvider, ballDontLieProvider, probeLeagueProvider, getAdditionalProviderStatus } from './providers/index.js';
 import { getOddsProviderStatus } from './oddsProviders/index.js';
 import { logsRouter } from './routes/logs.js';
 import { oddsApiRouter } from './routes/oddsApi.js';
@@ -28,6 +28,7 @@ app.get('/health', (req, res) => {
     ok: true,
     provider_defaults: getProviderDefaults(),
     league_data: getLeagueProviderStatus(),
+    additional_providers: getAdditionalProviderStatus(),
     odds: getOddsProviderStatus()
   });
 });
@@ -35,10 +36,11 @@ app.get('/health', (req, res) => {
 // Fixed read-only diagnostics: never expose raw account responses or API keys.
 app.get('/v1/providers/access', async (req, res, next) => {
   try {
+    if (['moneyline','thesportsdb'].includes(req.query.provider)) return res.json(await probeLeagueProvider(req.query.provider,assertLeagueCode(req.query.league)));
     if (req.query.provider === 'balldontlie') return res.json(await ballDontLieProvider.getAccess());
     if (req.query.provider === 'apisports') return res.json(await apiSportsProvider.getAccess(assertLeagueCode(req.query.league)));
     if (req.query.provider === 'oddsPapi') return res.json(await oddsPapiProvider.getAccess(req.query.sport));
-    throw new HttpError(400, 'provider must be balldontlie, apisports or oddsPapi.');
+    throw new HttpError(400, 'provider must be balldontlie, moneyline, thesportsdb, apisports or oddsPapi.');
   } catch (error) { next(error); }
 });
 

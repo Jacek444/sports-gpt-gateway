@@ -13,6 +13,7 @@ const leagueSchema = z.enum([
 ]);
 
 const providerSchema = z.enum([
+  'moneyline',
   'sharpApi',
   'oddsPapi',
   'sportsGameOdds',
