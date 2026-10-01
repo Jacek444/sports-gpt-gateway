@@ -103,14 +103,18 @@ Explicit Render order overrides still win. OddsPapi reads account entitlements
 before paid-quota requests, uses subscribed books only, caches reference data
 for a day and prices for 60 seconds, and spaces requests by 2.2 seconds. It
 supports pregame discovery and core two-way full-game markets for NFL/NCAAF,
-NBA/NCAAM, MLB and NHL where the subscription and exact catalogue mapping allow
-it. Unsupported markets, sports, books or ambiguous mappings fail into the
-existing discovery/board fallback. Provider-specific event IDs never cross feeds.
+NBA/WNBA/NCAAM, MLB and NHL where the subscription and exact catalogue mapping
+allow it. On a selected event it can also request MLB first-five, NHL
+first-period, football/basketball first-half, full-game team totals, and named
+player-prop markets. Deep-market requests require that provider's event ID and
+only return prices when its catalogue and account access permit them. Unsupported
+markets, sports, books or ambiguous mappings fail into the existing
+discovery/board fallback. Provider-specific event IDs never cross feeds.
 `changedAt` means the price last changed, not a refreshed feed timestamp.
 Tournament boards are requested one sportsbook at a time, then joined only
 when fixture IDs, teams and start times match. Defaults prefer DraftKings and
 FanDuel; Pinnacle is used if neither is subscribed. Explicit book requests are
-honored. Props, live odds, standings and injuries are not added by this integration.
+honored. Live odds, standings and injuries are not added by this integration.
 
 API-Sports supplies games, scores and team directories through the existing
 league tools when the selected general-data provider lacks a key. Configured

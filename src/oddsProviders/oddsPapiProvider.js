@@ -4,10 +4,10 @@ import { FreeProviderClient } from '../clients/freeProviderClient.js';
 
 const SCOPES = {
   americanfootball_nfl: ['american-football','nfl'], americanfootball_ncaaf: ['american-football','ncaa'],
-  basketball_nba: ['basketball','nba'], basketball_ncaab: ['basketball','ncaa'],
+  basketball_nba: ['basketball','nba'], basketball_wnba: ['basketball','wnba'], basketball_ncaab: ['basketball','ncaa'],
   baseball_mlb: ['baseball','mlb'], icehockey_nhl: ['ice-hockey','nhl']
 };
-const aliases = {NFL:'americanfootball_nfl',NCAAF:'americanfootball_ncaaf',NBA:'basketball_nba',NCAAM:'basketball_ncaab',MLB:'baseball_mlb',NHL:'icehockey_nhl'};
+const aliases = {NFL:'americanfootball_nfl',NCAAF:'americanfootball_ncaaf',NBA:'basketball_nba',WNBA:'basketball_wnba',NCAAM:'basketball_ncaab',MLB:'baseball_mlb',NHL:'icehockey_nhl'};
 const csv = s => String(s || '').split(',').map(s=>s.trim()).filter(Boolean);
 const unavailable = (message, details={}) => new HttpError(503, `OddsPapi: ${message}`, {provider:'oddsPapi',...details});
 export class OddsPapiProvider {
@@ -115,10 +115,43 @@ export class OddsPapiProvider {
   }
   // Deliberately exact: never label DNB, half/period or three-way regulation
   // results as the gateway's two-way full-game moneyline.
-  marketKey(m) {
+  marketKey(m, scope) {
     // Live v4 catalogue: result includes overtime (and MLB extra innings).
     // NHL fulltime is regulation-only and must never be relabelled as h2h.
-    if (m.playerProp || m.period !== 'result' || m.marketLength !== 2) return null;
+    if (m.playerProp || m.marketLength !== 2) return null;
+    if (scope?.key === 'baseball_mlb' && m.period === 'p1+p2+p3+p4+p5') {
+      const firstFive = {
+        'Winner First To Fifth Inning': ['f5_moneyline','moneyline'],
+        'Over Under First To Fifth Inning': ['f5_total','totals'],
+        'Handicap First To Fifth Inning': ['f5_spread','spreads']
+      };
+      const match=firstFive[m.marketName];
+      return match?.[1]===m.marketType ? match[0] : null;
+    }
+    if (scope?.key === 'icehockey_nhl' && m.period === 'p1') {
+      const firstPeriod = {
+        'First Period Winner': ['p1_moneyline','moneyline'],
+        'First Period Total': ['p1_total','totals'],
+        'First Period Handicap': ['p1_spread','spreads']
+      };
+      const match=firstPeriod[m.marketName];
+      return match?.[1]===m.marketType ? match[0] : null;
+    }
+    if (['basketball_nba','basketball_wnba','basketball_ncaab','americanfootball_nfl','americanfootball_ncaaf'].includes(scope?.key) &&
+        (m.period === 'p1+p2' || (m.period === '' && m.marketName === 'First Half Winner'))) {
+      const firstHalf = {
+        'First Half Winner': ['first_half_moneyline','moneyline'],
+        'Over Under First Half': ['first_half_total','totals'],
+        'Handicap First Half': ['first_half_spread','spreads']
+      };
+      const match=firstHalf[m.marketName];
+      return match?.[1]===m.marketType ? match[0] : null;
+    }
+    if (m.period !== 'result') return null;
+    const teamTotal = /^(?:Over Under Team |Team )(1|2)(?: Total)? \(incl\. (?:overtime|overtime and penalties|extra innings)\)$/.exec(m.marketName);
+    if (teamTotal && m.marketType === `teamtotals-team${teamTotal[1]}`) {
+      return teamTotal[1] === '1' ? 'team_total_home' : 'team_total_away';
+    }
     const names = {
       moneyline: ['Winner (incl. overtime)', 'Winner (incl. overtime and penalties)', 'Winner (incl. extra innings)'],
       spreads: ['Handicap (incl. overtime)', 'Handicap (incl. overtime and penalties)', 'Handicap (incl. extra innings)'],
@@ -130,42 +163,63 @@ export class OddsPapiProvider {
   normalizeOdds(row,scope,params,bounds,books,catalogue,markets) {
     const event=this.event(row,scope,params,bounds); if (!event) return null;
     event.bookmakers=[];
+    const definitions = new Map(catalogue.map(m => [String(m.marketId), m]));
     for (const key of books) {
       const b=row.bookmakerOdds?.[key];
       if (!b || b.bookmakerIsActive!==true || b.suspended===true) continue;
       const grouped=new Map();
       for (const [id, raw] of Object.entries(b.markets || {})) {
         if (raw.marketActive===false) continue;
-        const def=catalogue.find(m=>String(m.marketId)===id), normalized=def && this.marketKey(def);
-        if (!normalized || !markets.includes(normalized)) continue;
-        const outcomes=[];
+        const def=definitions.get(id);
+        const normalized=def && this.marketKey(def,scope);
+        const propQueries=markets.filter(m=>m.startsWith('prop:')).map(m=>m.slice(5).trim().toLowerCase());
+        const isProp=def?.playerProp===true && propQueries.some(q=>q && def.marketName?.toLowerCase().includes(q));
+        if ((!normalized || (!markets.includes(normalized) && !(normalized.startsWith('team_total_') && markets.includes('team_totals')))) && !isProp) continue;
+        const marketName=isProp?`prop:${def.marketName}`:normalized;
+        let outcomes=[];
         for (const outcome of def.outcomes || []) {
-          const p=raw.outcomes?.[outcome.outcomeId]?.players?.['0'];
-          if (!p || p.active!==true || p.playerName || (normalized!=='h2h' && p.mainLine!==true)) continue;
+          const players=raw.outcomes?.[outcome.outcomeId]?.players || {};
+          for (const p of Object.values(players)) {
+          if (!p || p.active!==true || (isProp ? !p.playerName : Boolean(p.playerName)) ||
+              (!isProp && !['h2h','f5_moneyline','p1_moneyline','first_half_moneyline'].includes(normalized) && p.mainLine!==true)) continue;
           const decimal=Number(p.price);
           if (!Number.isFinite(decimal)||decimal<=1) continue;
           const label=String(outcome.outcomeName).toLowerCase();
           const side=['1','home','home team'].includes(label)?'home':['2','away','away team'].includes(label)?'away':null;
-          const name=normalized==='totals' ? (label==='over'?'Over':label==='under'?'Under':null) : side==='home'?event.home_team:side==='away'?event.away_team:null;
+          const isTotal=['totals','f5_total','p1_total','first_half_total','team_total_home','team_total_away'].includes(normalized);
+          const name=isProp ? (label==='over'?'Over':label==='under'?'Under':outcome.outcomeName) :
+            isTotal ? (label==='over'?'Over':label==='under'?'Under':null) : side==='home'?event.home_team:side==='away'?event.away_team:null;
           if (!name) continue;
           const point=Number(def.handicap);
-          if (normalized!=='h2h' && (def.handicap===null||!Number.isFinite(point))) continue;
+          if (!['h2h','f5_moneyline','p1_moneyline','first_half_moneyline'].includes(normalized) && (def.handicap===null||!Number.isFinite(point))) continue;
           const price=params.oddsFormat==='decimal'?decimal:Math.round(decimal>=2?(decimal-1)*100:-100/(decimal-1));
-          outcomes.push({name,price,...(normalized!=='h2h'?{point:normalized==='spreads'&&side==='away'?-point:point}:{}),...(p.changedAt?{last_update:p.changedAt}:{})});
+          outcomes.push({name,price,...(!['h2h','f5_moneyline','p1_moneyline','first_half_moneyline'].includes(normalized)?{point:['spreads','f5_spread','p1_spread','first_half_spread'].includes(normalized)&&side==='away'?-point:point}:{}),...(isProp?{description:p.playerName}:{}),...(normalized==='team_total_home'?{description:event.home_team}:normalized==='team_total_away'?{description:event.away_team}:{}),...(p.changedAt?{last_update:p.changedAt}:{})});
+          }
         }
-        if (outcomes.length===2) {
-          if (!grouped.has(normalized)) grouped.set(normalized,[]);
-          grouped.get(normalized).push(...outcomes);
+        if (isProp) {
+          const byPlayer = new Map();
+          for (const item of outcomes) {
+            const identity = `${item.description}|${item.point ?? ''}`;
+            if (!byPlayer.has(identity)) byPlayer.set(identity, new Set());
+            byPlayer.get(identity).add(item.name);
+          }
+          outcomes = outcomes.filter(item => byPlayer.get(`${item.description}|${item.point ?? ''}`)?.size >= 2);
+        }
+        if ((isProp && outcomes.length>=2) || (!isProp && outcomes.length===2)) {
+          if (!grouped.has(marketName)) grouped.set(marketName,[]);
+          grouped.get(marketName).push(...outcomes);
         }
       }
-      const mapped=[...grouped].map(([key,outcomes])=>({key,outcomes}));
+      const mapped=[...grouped].map(([key,outcomes])=>({key,outcomes,...(key.startsWith('prop:')?{title:key.slice(5)}:{})}));
       if (mapped.length) event.bookmakers.push({key,title:key,markets:mapped});
     }
     return event.bookmakers.length?event:null;
   }
   async odds(sport,params={},eventId=null) {
     const bounds=this.validate(params), markets=csv(params.markets || 'h2h,spreads,totals');
-    if (!markets.length || markets.some(m=>!['h2h','spreads','totals'].includes(m))) throw unavailable('this adapter currently supports h2h, spreads and totals only; use another provider for props or alternates.');
+    const supported=['h2h','spreads','totals','f5_moneyline','f5_spread','f5_total','p1_moneyline','p1_spread','p1_total','first_half_moneyline','first_half_spread','first_half_total','team_totals'];
+    if (!markets.length || markets.some(m=>!supported.includes(m) && !/^prop:[a-z0-9 _-]+$/i.test(m))) throw unavailable('unsupported market. Use core, first-five, first-period, first-half, team_totals, or prop:<catalogue name>.');
+    if (!eventId && markets.some(m=>!['h2h','spreads','totals'].includes(m))) throw unavailable('deep markets require a selected fixture ID; discover the event first to avoid a costly full-slate prop request.');
     const books=await this.books(params), scope=await this.scope(sport), catalogue=await this.catalogue(scope);
     const ids=eventId?[eventId]:csv(params.eventIds);
     const merged=new Map();
@@ -190,7 +244,7 @@ export class OddsPapiProvider {
     }
     const data=[...merged.values()];
     const found=new Set(data.flatMap(e=>e.bookmakers.flatMap(b=>b.markets.map(m=>m.key))));
-    if (!data.length||markets.some(m=>!found.has(m))) throw unavailable('no usable odds for every requested market.',{market_reference:catalogue.filter(m=>m.marketLength===2&&!m.playerProp).slice(0,15).map(m=>({name:m.marketName,type:m.marketType,period:m.period}))});
+    if (!data.length||markets.some(m=>m.startsWith('prop:')?![...found].some(k=>k.startsWith('prop:')&&k.slice(5).toLowerCase().includes(m.slice(5).toLowerCase())):m==='team_totals'?![...found].some(k=>k.startsWith('team_total_')):!found.has(m))) throw unavailable('no usable odds for every requested market.',{market_reference:catalogue.filter(m=>m.marketLength===2&&!m.playerProp).slice(0,15).map(m=>({name:m.marketName,type:m.marketType,period:m.period}))});
     return this.envelope(eventId?data[0]:data,{requested_markets:markets});
   }
   getOddsBoard(sport,params) {return this.odds(sport,params);}
