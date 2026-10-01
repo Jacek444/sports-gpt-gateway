@@ -57,6 +57,7 @@ test('OddsPapi access whitelists secrets and refuses unsubscribed books before c
  const a=await p.getAccess();assert.equal(a.remaining,248);assert.equal(JSON.stringify(a).includes(key),false);
  await assert.rejects(p.books({bookmakers:'draftkings'}));assert.equal(calls,1);
  await assert.rejects(p.getOddsBoard('NFL',{markets:'player_points'}));assert.equal(calls,1);
+ await assert.rejects(p.getOddsBoard('MLB',{markets:'prop:pitcher strikeouts'}),e=>/selected fixture ID/.test(e.message));assert.equal(calls,1);
 });
 test('OddsPapi normalizes both sides and signs while excluding inactive, props and alternate markets',()=>{
  const p=oddsProvider(); const f=fixture();const bounds={from:Date.now(),to:Date.now()+2*86400000};
@@ -71,6 +72,36 @@ test('OddsPapi normalizes both sides and signs while excluding inactive, props a
  assert.equal(p.marketKey({...markets[0],playerProp:true}),null);
  assert.equal(p.marketKey({...markets[0],marketLength:3}),null);
  f.bookmakerOdds.pinnacle.suspended=true;assert.equal(p.normalizeOdds(f,scope,{},bounds,['pinnacle'],markets,['h2h']),null);
+});
+test('OddsPapi keeps MLB F5, team totals, and named player props distinct from full-game prices',()=>{
+ const p=oddsProvider(), f=fixture();
+ const mlbScope={key:'baseball_mlb',sportId:12,tournamentId:100};
+ const definitions=[
+  {marketId:50,marketName:'Over Under First To Fifth Inning',marketType:'totals',marketLength:2,sportId:12,period:'p1+p2+p3+p4+p5',handicap:3.5,outcomes:[{outcomeId:501,outcomeName:'Over'},{outcomeId:502,outcomeName:'Under'}]},
+  {marketId:51,marketName:'Over Under Team 1 (incl. extra innings)',marketType:'teamtotals-team1',marketLength:2,sportId:12,period:'result',handicap:4.5,outcomes:[{outcomeId:511,outcomeName:'Over'},{outcomeId:512,outcomeName:'Under'}]},
+  {marketId:52,marketName:'Over Under Pitcher Strikeouts',marketType:'player-prop',marketLength:2,playerProp:true,sportId:12,period:'result',handicap:5.5,outcomes:[{outcomeId:521,outcomeName:'Over'},{outcomeId:522,outcomeName:'Under'}]}
+ ];
+ f.bookmakerOdds.pinnacle.markets=Object.fromEntries(definitions.map(m=>[m.marketId,{marketActive:true,outcomes:Object.fromEntries(m.outcomes.map(o=>[o.outcomeId,{players:{[m.playerProp?'42':'0']:{active:true,price:1.91,mainLine:true,playerName:m.playerProp?'Starter':null}}}]))}]));
+ const result=p.normalizeOdds(f,mlbScope,{}, {from:Date.now(),to:Date.now()+2*86400000},['pinnacle'],definitions,['f5_total','team_totals','prop:pitcher strikeouts']);
+ const byKey=new Map(result.bookmakers[0].markets.map(m=>[m.key,m]));
+ assert.deepEqual([...byKey.keys()],['f5_total','team_total_home','prop:Over Under Pitcher Strikeouts']);
+ assert.deepEqual(byKey.get('f5_total').outcomes.map(o=>o.point),[3.5,3.5]);
+ assert.deepEqual(byKey.get('team_total_home').outcomes.map(o=>o.description),['Home','Home']);
+ assert.deepEqual(byKey.get('prop:Over Under Pitcher Strikeouts').outcomes.map(o=>o.description),['Starter','Starter']);
+ delete f.bookmakerOdds.pinnacle.markets[52].outcomes[522].players[42];
+ const withoutPair=p.normalizeOdds(f,mlbScope,{}, {from:Date.now(),to:Date.now()+2*86400000},['pinnacle'],definitions,['prop:pitcher strikeouts']);
+ assert.equal(withoutPair,null);
+});
+
+test('OddsPapi period mapping is league-specific and does not turn three-way hockey into two-way',()=>{
+ const p=oddsProvider();
+ const twoWay=(name,period,type='totals')=>({marketName:name,period,marketType:type,marketLength:2,playerProp:false});
+ assert.equal(p.marketKey(twoWay('First Period Total','p1'),{key:'icehockey_nhl'}),'p1_total');
+ assert.equal(p.marketKey(twoWay('First Period Result','p1','1x2'),{key:'icehockey_nhl'}),null);
+ assert.equal(p.marketKey({...twoWay('First Period Winner','p1','moneyline'),marketLength:3},{key:'icehockey_nhl'}),null);
+ assert.equal(p.marketKey(twoWay('Over Under First Half','p1+p2'),{key:'basketball_wnba'}),'first_half_total');
+ assert.equal(p.marketKey(twoWay('Over Under First Half','p1+p2'),{key:'americanfootball_nfl'}),'first_half_total');
+ assert.equal(p.marketKey(twoWay('Over Under First Half','p1+p2'),{key:'baseball_mlb'}),null);
 });
 test('OddsPapi discovers exact competition, returns pregame board, reuses reference cache and budgets failures',async()=>{
  const calls=[];

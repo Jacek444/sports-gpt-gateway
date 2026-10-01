@@ -112,9 +112,12 @@ async function call(
   }
 
   if (!response.ok) {
+    const rawCode = responseBody?.error?.code ?? responseBody?.code;
+    const errorCode = typeof rawCode === 'string' && /^[A-Z][A-Z0-9_]{1,63}$/.test(rawCode)
+      ? rawCode : null;
     throw new HttpError(
       502,
-      'ParlayAPI request failed',
+      `ParlayAPI request failed (HTTP ${response.status}${errorCode ? ` ${errorCode}` : ''})`,
       {
         provider: 'parlayApi',
         status: response.status,
@@ -126,7 +129,7 @@ async function call(
           response.headers.get(
             'retry-after'
           ),
-        body: responseBody
+        ...(errorCode ? { errorCode } : {})
       }
     );
   }

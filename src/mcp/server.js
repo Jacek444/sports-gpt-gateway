@@ -424,7 +424,7 @@ export const mcpHandler = createMcpHandler(() => {
     'sharpbet_get_event_odds',
     {
       description:
-        'Get odds for one specific event. Use this for player props, alternate lines, game props, and other event-specific markets.',
+        'Deep-screen a shortlisted event. Keep its provider-specific event ID. Request one compatible market family at a time: OddsPapi supports F5 (f5_moneyline, f5_spread, f5_total), NHL first period (p1_*), first half (first_half_*), team_totals, and catalog-named props (prop:pitcher strikeouts). ParlayAPI supports named player props and alternate_spreads/alternate_totals. A rejected or empty request is not proof the sportsbook lacks that market; report the gap and verify finalist prices in the user’s sportsbook.',
       inputSchema: z.object({
         sport: z.string(),
         eventId: z.string(),
