@@ -15,7 +15,7 @@ test('HTTP schedule route uses real adapter flow, falls back, and never substitu
       return res.end(JSON.stringify([{ id: 'fixture-bet', result: 'pending', stake_usd: 2.5 }]));
     }
     if (url.pathname === '/rest/v1/promos' && req.method === 'GET') {
-      return res.end(JSON.stringify([{ id: 'fixture-promo', status: 'AVAILABLE', boost_percent: 33 }]));
+      return res.end(JSON.stringify([{ id: 'fixture-promo', status: 'AVAILABLE', boost_percent: 33, expires_at: '2000-01-01T00:00:00Z' }]));
     }
     if (url.pathname.startsWith('/rest/v1/')) return res.end('{}');
     calls.push(url.pathname);
@@ -90,6 +90,9 @@ test('HTTP schedule route uses real adapter flow, falls back, and never substitu
     const promos = await promoResponse.json();
     assert.equal(promos.data[0].id, 'fixture-promo');
     assert.equal(promos.data[0].boost_percent, 33);
+    assert.equal(promos.data[0].status, 'AVAILABLE');
+    assert.equal(promos.data[0].effective_status, 'EXPIRED');
+    assert.equal(promos.data[0].availability_requires_confirmation, false);
     primaryFails = true;
     const secondary = await (await get('/v1/games?league=NFL')).json();
     assert.equal(secondary.data[0].id, 'parlayApi:fixture-parlay');

@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { HttpError } from './errors.js';
+import { annotatePromoAvailability } from './promoAvailability.js';
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
@@ -744,7 +745,8 @@ export async function listPromos({
     throw new HttpError(500, 'Failed to read promo inventory');
   }
 
-  return data || [];
+  const now = Date.now();
+  return (data || []).map(promo => annotatePromoAvailability(promo, now));
 }
 
 export async function addPromo(input) {

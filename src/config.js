@@ -88,6 +88,13 @@ export const config = {
     }
   },
 
+  // BetMGM core boards have their own preference; other markets retain the
+  // configured general chain. Disabled/unconfigured sources are still skipped.
+  oddsBetmgmProviderOrder: env(
+    'ODDS_BETMGM_PROVIDER_ORDER',
+    'parlayApi,oddsPapi,sportsGameOdds,theOddsApi'
+  ).split(',').map(name => name.trim()).filter(Boolean),
+
   oddsProviderOrder: env(
     'ODDS_PROVIDER_ORDER',
     'sharpApi,oddsPapi,moneyline,sportsGameOdds,parlayApi,theOddsApi'

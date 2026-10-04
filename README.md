@@ -160,8 +160,8 @@ Set `SHARP_API_KEY` in Render's Environment settings (never in GitHub).
 `SHARP_API_ENABLED` defaults to `true`, but an absent key keeps the provider unavailable.
 The provider name is `sharpApi` in REST and MCP. New default provider orders put
 SharpAPI first. Explicit `ODDS_PROVIDER_ORDER` and `ODDS_SPORTS_PROVIDER_ORDER`
-values remain authoritative: prepend `sharpApi,` to each existing Render value
-if you want to conserve credits on the other providers. Deploy the source before
+values remain authoritative for general discovery and boards. Do not put SharpAPI
+ahead of BetMGM requests: its free adapter supports only DraftKings/FanDuel. Deploy the source before
 verifying `/health` and `/v1/odds/status`.
 
 This adapter supports delayed **pregame** events and odds for NFL, NCAAF, NBA,
@@ -534,3 +534,49 @@ BALLDONTLIE currently documents webhooks for some sports, but not all of the lea
 2. Add webhook ingestion where available
 3. Finish the SportsDataIO adapter for your purchased feed set
 4. Add auth before exposing the gateway publicly
+
+## BetMGM core-board routing
+
+Automatic `/v1/odds/:sport/odds` requests that explicitly include `bookmakers=betmgm`
+with only `h2h`, `spreads`, and/or `totals` first use
+`ODDS_BETMGM_PROVIDER_ORDER` (default `parlayApi,oddsPapi,sportsGameOdds,theOddsApi`),
+then any additional providers from the configured board order. Disabled,
+unconfigured, and cooling-down providers remain skipped. This is a preference,
+not a claim of current provider health or market entitlement. The status endpoint
+reports `betmgmCoreOrder`; provider quota and availability still require inspection.
+
+Automatic boards skip SharpAPI and MoneyLine when requested books exceed their
+DraftKings/FanDuel adapter support. Known unsupported market families also skip
+those adapters. Explicit `provider` overrides retain diagnostic behavior.
+Normalized board responses must include numeric prices for each requested book
+and market somewhere on the board before they stop fallback. This does not prove
+complete event coverage, paired outcomes, freshness, or executable value; inspect
+the selected event and verify the offered sportsbook price. SportsGameOdds and
+OddsAPI.io retain native response trees and are not subject to this normalized
+coverage check.
+
+Discovery, scores, and provider-specific event odds retain their existing routing.
+Do not reuse one provider's event ID on another feed. For missing specialized
+markets, rediscover the same league, teams, and start time on a suitable configured
+provider, then use its returned gateway event ID. ParlayAPI's core-board preference
+does not imply support for F5 or other derivative markets. Test coverage and monitor
+quota before changing the production preference.
+
+## V5.3 decisions and promo inventory
+
+`gpt/CUSTOM_GPT_INSTRUCTIONS.md` is the canonical V5.3 dual-compatible guide;
+`gpt/DECISION_AND_PROMO_WORKFLOW.md` specifies session continuity, finished market
+searches, concrete WAIT triggers, and final-price promo evaluation. Updating the
+repository does not automatically update a Custom GPT's saved instructions or an
+installed plugin. The corresponding plugin package must be applied separately.
+V5.3 keeps $5 units and exposure discipline, allows supported 0.5u plays, and
+allows a verified improved promo price to overcome a price-only PASS on a supported
+handicap. It does not force wagers or let promos repair weak legs or bad handicaps.
+
+Promo reads now include derived `effective_status`, `expiration_state`,
+`availability_requires_confirmation`, and `availability_checked_at`. A saved
+NEW/AVAILABLE token whose known expiry has passed is effectively EXPIRED.
+Null/invalid expiry is unknown; USED/VOID records stay consumed/unavailable.
+The API preserves saved status, does not update records on reads, and does not
+claim account availability was checked at the sportsbook. `status` filters still
+filter the saved column; inspect derived fields before evaluating a returned token.

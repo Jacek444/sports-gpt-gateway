@@ -712,6 +712,9 @@ export function getOddsProviderStatus() {
     sportsOrder:
       config.oddsSportsProviderOrder,
 
+    betmgmCoreOrder:
+      config.oddsBetmgmProviderOrder,
+
     providers:
       Object.fromEntries(
         names.map((name) => {
