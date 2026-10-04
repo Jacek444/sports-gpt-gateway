@@ -564,7 +564,7 @@ export const mcpHandler = createMcpHandler(() => {
     'sharpbet_list_promos',
     {
       description:
-        'Read the current SharpBet sportsbook promo inventory. Use this before recommending how to deploy boosts, bonus bets, or other active promotions.',
+        'Read SharpBet promo inventory before recommendations. Inspect effective_status and expiration_state: saved AVAILABLE may be expired, and unknown expiry requires confirmation rather than an automatic pass. Status filters use saved status; reads never change inventory.',
       inputSchema: z.object({
         limit: z.number().int().min(1).max(200).optional(),
         offset: z.number().int().min(0).optional(),

@@ -561,3 +561,22 @@ markets, rediscover the same league, teams, and start time on a suitable configu
 provider, then use its returned gateway event ID. ParlayAPI's core-board preference
 does not imply support for F5 or other derivative markets. Test coverage and monitor
 quota before changing the production preference.
+
+## V5.3 decisions and promo inventory
+
+`gpt/CUSTOM_GPT_INSTRUCTIONS.md` is the canonical V5.3 dual-compatible guide;
+`gpt/DECISION_AND_PROMO_WORKFLOW.md` specifies session continuity, finished market
+searches, concrete WAIT triggers, and final-price promo evaluation. Updating the
+repository does not automatically update a Custom GPT's saved instructions or an
+installed plugin. The corresponding plugin package must be applied separately.
+V5.3 keeps $5 units and exposure discipline, allows supported 0.5u plays, and
+allows a verified improved promo price to overcome a price-only PASS on a supported
+handicap. It does not force wagers or let promos repair weak legs or bad handicaps.
+
+Promo reads now include derived `effective_status`, `expiration_state`,
+`availability_requires_confirmation`, and `availability_checked_at`. A saved
+NEW/AVAILABLE token whose known expiry has passed is effectively EXPIRED.
+Null/invalid expiry is unknown; USED/VOID records stay consumed/unavailable.
+The API preserves saved status, does not update records on reads, and does not
+claim account availability was checked at the sportsbook. `status` filters still
+filter the saved column; inspect derived fields before evaluating a returned token.
