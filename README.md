@@ -160,8 +160,8 @@ Set `SHARP_API_KEY` in Render's Environment settings (never in GitHub).
 `SHARP_API_ENABLED` defaults to `true`, but an absent key keeps the provider unavailable.
 The provider name is `sharpApi` in REST and MCP. New default provider orders put
 SharpAPI first. Explicit `ODDS_PROVIDER_ORDER` and `ODDS_SPORTS_PROVIDER_ORDER`
-values remain authoritative: prepend `sharpApi,` to each existing Render value
-if you want to conserve credits on the other providers. Deploy the source before
+values remain authoritative for general discovery and boards. Do not put SharpAPI
+ahead of BetMGM requests: its free adapter supports only DraftKings/FanDuel. Deploy the source before
 verifying `/health` and `/v1/odds/status`.
 
 This adapter supports delayed **pregame** events and odds for NFL, NCAAF, NBA,
@@ -534,3 +534,30 @@ BALLDONTLIE currently documents webhooks for some sports, but not all of the lea
 2. Add webhook ingestion where available
 3. Finish the SportsDataIO adapter for your purchased feed set
 4. Add auth before exposing the gateway publicly
+
+## BetMGM core-board routing
+
+Automatic `/v1/odds/:sport/odds` requests that explicitly include `bookmakers=betmgm`
+with only `h2h`, `spreads`, and/or `totals` first use
+`ODDS_BETMGM_PROVIDER_ORDER` (default `parlayApi,oddsPapi,sportsGameOdds,theOddsApi`),
+then any additional providers from the configured board order. Disabled,
+unconfigured, and cooling-down providers remain skipped. This is a preference,
+not a claim of current provider health or market entitlement. The status endpoint
+reports `betmgmCoreOrder`; provider quota and availability still require inspection.
+
+Automatic boards skip SharpAPI and MoneyLine when requested books exceed their
+DraftKings/FanDuel adapter support. Known unsupported market families also skip
+those adapters. Explicit `provider` overrides retain diagnostic behavior.
+Normalized board responses must include numeric prices for each requested book
+and market somewhere on the board before they stop fallback. This does not prove
+complete event coverage, paired outcomes, freshness, or executable value; inspect
+the selected event and verify the offered sportsbook price. SportsGameOdds and
+OddsAPI.io retain native response trees and are not subject to this normalized
+coverage check.
+
+Discovery, scores, and provider-specific event odds retain their existing routing.
+Do not reuse one provider's event ID on another feed. For missing specialized
+markets, rediscover the same league, teams, and start time on a suitable configured
+provider, then use its returned gateway event ID. ParlayAPI's core-board preference
+does not imply support for F5 or other derivative markets. Test coverage and monitor
+quota before changing the production preference.

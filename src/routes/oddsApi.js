@@ -1,5 +1,7 @@
 import express from 'express';
 import { config } from '../config.js';
+import { HttpError } from '../errors.js';
+import { oddsRequestOrder, hasRequestedQuotes } from '../oddsProviders/requestRouting.js';
 import {
   getOddsProviderUsageSummary,
   updateBetLogEntry
@@ -2205,15 +2207,22 @@ oddsApiRouter.get(
 
       const result =
         await withOddsProviderFallback(
-          (provider) =>
-            provider.getOddsBoard(
-              sport,
-              params
-            ),
+          async (provider, providerName) => {
+            const result = await provider.getOddsBoard(sport, params);
+            // SportsGameOdds and OddsAPI.io return native odds trees. Do not
+            // misinterpret those as empty normalized bookmaker arrays.
+            if (!['sportsGameOdds', 'oddsApiIo'].includes(providerName) && !hasRequestedQuotes(result, params)) {
+              throw new HttpError(503, 'No usable quotes for every requested book and market; trying fallback.', { provider: providerName });
+            }
+            return result;
+          },
 
           {
             order:
-              config.oddsSportsProviderOrder,
+              oddsRequestOrder(params, {
+                defaultOrder: config.oddsSportsProviderOrder,
+                betmgmOrder: config.oddsBetmgmProviderOrder
+              }),
 
             cacheKey:
               `odds:auto:${sport}:${JSON.stringify(params)}`,

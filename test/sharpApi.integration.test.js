@@ -8,6 +8,7 @@ test('SharpAPI works through HTTP with cache, compact metadata, event IDs, fallb
   const start = new Date(Date.now() + 86400000).toISOString();
   let rateLimited = false;
   let sharpCalls = 0;
+  let parlayEmpty = false;
   const upstream = createServer((req, res) => {
     const url = new URL(req.url, 'http://localhost');
     res.setHeader('Content-Type', 'application/json');
@@ -31,7 +32,11 @@ test('SharpAPI works through HTTP with cache, compact metadata, event IDs, fallb
       return res.end(JSON.stringify({ data, pagination: { has_more: false } }));
     }
     if (url.pathname === '/v1/sports/basketball_nba/odds') {
-      return res.end(JSON.stringify([{ id: 'parlay-game', home_team: 'Home', away_team: 'Away', commence_time: start, bookmakers: [] }]));
+      if (parlayEmpty) return res.end('[]');
+      return res.end(JSON.stringify([{ id: 'parlay-game', home_team: 'Home', away_team: 'Away', commence_time: start, bookmakers: [{ key: 'betmgm', markets: [{ key: 'h2h', outcomes: [{ name: 'Home', price: -120 }] }] }] }]));
+    }
+    if (url.pathname === '/v4/sports/basketball_nba/odds') {
+      return res.end(JSON.stringify([{ id: 'fallback-game', home_team: 'Home', away_team: 'Away', commence_time: start, bookmakers: [{ key: 'betmgm', markets: [{ key: 'h2h', outcomes: [{ name: 'Home', price: -125 }] }] }] }]));
     }
     if (url.pathname === '/v1/sports/basketball_nba/events') {
       return res.end(JSON.stringify([{ id: 'parlay-game', home_team: 'Home', away_team: 'Away', commence_time: start }]));
@@ -51,7 +56,9 @@ test('SharpAPI works through HTTP with cache, compact metadata, event IDs, fallb
     SUPABASE_URL: base, SUPABASE_SECRET_KEY: 'fixture-only',
     SHARP_API_KEY: 'fixture-key', SHARP_API_ENABLED: 'true', SHARP_API_BASE_URL: base,
     PARLAY_API_ENABLED: 'true', PARLAY_API_KEY: 'fixture-key', PARLAY_API_BASE_URL: base,
-    THE_ODDS_API_ENABLED: 'false', SPORTSGAMEODDS_ENABLED: 'false', ODDS_API_IO_ENABLED: 'false',
+    THE_ODDS_API_ENABLED: 'true', ODDS_API_KEY: 'fixture-key', ODDS_API_BASE_URL: base,
+    ODDS_BETMGM_PROVIDER_ORDER: 'parlayApi,theOddsApi',
+    SPORTSGAMEODDS_ENABLED: 'false', ODDS_API_IO_ENABLED: 'false',
     ODDS_PROVIDER_ORDER: 'sharpApi,parlayApi', ODDS_SPORTS_PROVIDER_ORDER: 'sharpApi,parlayApi'
   }, stdio: ['ignore', 'pipe', 'pipe'] });
   let logs = '';
@@ -85,6 +92,13 @@ test('SharpAPI works through HTTP with cache, compact metadata, event IDs, fallb
     assert.equal(board.body.provider, 'sharpApi');
     const fallback = await get('/v1/odds/basketball_nba/odds?markets=h2h&bookmakers=betmgm');
     assert.equal(fallback.body.provider, 'parlayApi');
+    const beforeEmpty = sharpCalls;
+    parlayEmpty = true;
+    const emptyFallback = await get(`/v1/odds/basketball_nba/odds?markets=h2h&bookmakers=betmgm&commenceTimeTo=${encodeURIComponent(start)}`);
+    assert.equal(emptyFallback.status, 200);
+    assert.equal(emptyFallback.body.provider, 'theOddsApi');
+    assert.equal(sharpCalls, beforeEmpty);
+    assert.equal(emptyFallback.body.data[0].gateway_event_id, 'theOddsApi:fallback-game');
     rateLimited = true;
     const limited = await get('/v1/odds/basketball_nba/events?commenceTimeFrom=2099-01-01T00%3A00%3A00Z');
     assert.equal(limited.body.provider, 'parlayApi');
