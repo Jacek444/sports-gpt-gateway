@@ -178,6 +178,21 @@ export const mcpHandler = createMcpHandler(() => {
     }
   );
 
+  server.registerTool('sharpbet_list_boxscore_games', {
+    description: 'Find NBA or NHL games in the free ESPN feed for a provider calendar date. Returns ESPN game IDs for player box-score lookup. Coverage may be partial; these IDs are not odds IDs.',
+    inputSchema: z.object({ league: z.enum(['NBA', 'NHL']), date: z.string() })
+  }, async params => {
+    try { return toolSuccess(await gatewayGet('/v1/boxscores/games', params)); }
+    catch (error) { return toolFailure(error); }
+  });
+  server.registerTool('sharpbet_get_player_boxscore', {
+    description: 'Read free ESPN NBA/NHL player game statistics using an exact ESPN game ID from box-score discovery. Optional numeric ESPN playerId filters athletes. Check final status, fixture, athlete, stat category and book rules before grading. Missing data and DNP are not zero. Does not update bets or depend on CLV.',
+    inputSchema: z.object({ league: z.enum(['NBA', 'NHL']), gameId: z.string(), playerId: z.string().optional() })
+  }, async ({ league, gameId, playerId }) => {
+    try { return toolSuccess(await gatewayGet(`/v1/boxscores/${encodeURIComponent(league)}/${encodeURIComponent(gameId)}`, { playerId })); }
+    catch (error) { return toolFailure(error); }
+  });
+
   server.registerTool(
     'sharpbet_list_leagues',
     {

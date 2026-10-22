@@ -83,6 +83,7 @@ export function getLeagueProviderStatus() {
         : provider === 'balldontlie' ? ['games', 'scores', 'teams', 'standings_requires_plan'] : [],
       fallback_order: getChainNames(league),
       runtime: ['balldontlie','moneyline','thesportsdb'].includes(provider) ? providers[provider].status() : null,
+      runtime_scope: ['balldontlie','moneyline','thesportsdb'].includes(provider) ? 'shared_provider_across_leagues_and_resources' : null,
       note: provider === 'odds'
         ? 'Betting-event coverage only; not a complete league schedule. Teams, standings and detailed game state require a general-data provider.'
         : provider === 'balldontlie' ? 'Endpoint access varies by sport and plan. Free-tier rate guard: five requests/minute; cached reads remain available. Odds use the separate odds-provider chain.' : null

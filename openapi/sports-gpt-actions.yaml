@@ -13,6 +13,63 @@ servers:
 - url: https://sports-gpt-gateway.onrender.com
   description: SharpBet Sports GPT Gateway on Render
 paths:
+  /v1/boxscores/games:
+    get:
+      operationId: listBoxscoreGames
+      summary: Find NBA or NHL ESPN game IDs for free player box-score lookup
+      description: Provider calendar date; coverage may be partial. ESPN IDs are not odds IDs.
+      parameters:
+      - name: league
+        in: query
+        required: true
+        schema:
+          type: string
+          enum: [NBA, NHL]
+      - name: date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: ESPN fixture IDs, teams, status and observation time
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /v1/boxscores/{league}/{gameId}:
+    get:
+      operationId: getPlayerBoxscore
+      summary: Retrieve free NBA or NHL player game statistics from ESPN
+      description: Read-only. Require final status and match fixture, athlete, stat and sportsbook rules before grading. Missing data and DNP are not zero. Does not save results or retrieve CLV.
+      parameters:
+      - name: league
+        in: path
+        required: true
+        schema:
+          type: string
+          enum: [NBA, NHL]
+      - name: gameId
+        in: path
+        required: true
+        description: Exact ESPN game ID returned by listBoxscoreGames
+        schema:
+          type: string
+      - name: playerId
+        in: query
+        schema:
+          type: string
+        description: Optional exact numeric ESPN athlete ID
+      responses:
+        '200':
+          description: Source game identity, final status, player stat keys and values, and observation time
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
   /health:
     get:
       operationId: healthCheck

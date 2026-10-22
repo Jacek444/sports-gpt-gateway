@@ -130,7 +130,10 @@ function rememberFailure(name, error) {
     message:
       error?.message ||
       String(error),
-    upstreamStatus
+    upstreamStatus,
+    ...(error?.details?.reason ? { reason: error.details.reason } : {}),
+    ...(error?.details?.errorCode ? { errorCode: error.details.errorCode } : {}),
+    ...(error?.details?.allowedFrom ? { allowedFrom: error.details.allowedFrom } : {})
   };
 
   if (Number(upstreamStatus) === 429) {
@@ -164,10 +167,10 @@ function rememberFailure(name, error) {
 
   if (
     theOddsApiOutOfCredits ||
-    genericCreditLimitExceeded
+    genericCreditLimitExceeded || error?.details?.reason === 'credits_exhausted'
   ) {
     const resetAt = Date.parse(
-      body.next_reset_at || ''
+      error?.details?.nextResetAt || body?.next_reset_at || ''
     );
 
     state.exhaustedUntil =

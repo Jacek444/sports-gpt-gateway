@@ -9,6 +9,7 @@ import { getOddsProviderStatus } from './oddsProviders/index.js';
 import { logsRouter } from './routes/logs.js';
 import { oddsApiRouter } from './routes/oddsApi.js';
 import { mcpHandler } from './mcp/server.js';
+import { espnBoxscore } from './providers/espnBoxscore.js';
 
 const app = express();
 
@@ -29,6 +30,7 @@ app.get('/health', (req, res) => {
     provider_defaults: getProviderDefaults(),
     league_data: getLeagueProviderStatus(),
     additional_providers: getAdditionalProviderStatus(),
+    player_boxscores: { provider: 'espn', leagues: ['NBA', 'NHL'], status: 'public_feed_not_probed', read_only: true, automatic_settlement: false },
     odds: getOddsProviderStatus()
   });
 });
@@ -48,6 +50,15 @@ app.get('/v1/leagues', (req, res) => {
   res.json({
     data: LEAGUE_DEFINITIONS
   });
+});
+
+app.get('/v1/boxscores/games', async (req, res, next) => {
+  try { res.json(await espnBoxscore.listGames({ league: req.query.league, date: req.query.date })); }
+  catch (error) { next(error); }
+});
+app.get('/v1/boxscores/:league/:gameId', async (req, res, next) => {
+  try { res.json(await espnBoxscore.getBoxscore({ league: req.params.league, gameId: req.params.gameId, playerId: req.query.playerId })); }
+  catch (error) { next(error); }
 });
 
 app.get('/v1/games', async (req, res, next) => {

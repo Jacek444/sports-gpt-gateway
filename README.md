@@ -1,5 +1,35 @@
 # Sports GPT Gateway
 
+## Free player box scores (NBA and NHL)
+
+`GET /v1/boxscores/games?league=NBA&date=2026-10-21` discovers ESPN fixture IDs.
+`GET /v1/boxscores/NBA/espn%3ANBA%3A401909835` retrieves player game statistics;
+optional `playerId` is the exact numeric ESPN athlete ID. MCP tools are
+`sharpbet_list_boxscore_games` and `sharpbet_get_player_boxscore`. NHL uses the
+same flow with `league=NHL`. Other leagues are not yet supported by this lookup.
+
+This is a public ESPN secondary feed, not a contracted API. Requests time out
+after ten seconds, coalesce/cache for one minute and cool down after HTTP 429.
+Date discovery uses the provider calendar; verify the returned fixture's start
+time against the desired local day, including adjacent dates when needed.
+Discovery is not claimed to be a complete schedule. IDs never cross providers.
+
+For grading, match fixture, athlete, statistic category and sportsbook rules.
+Require `meta.final` and actual stat values. Missing tables/columns, unknown
+athletes and DNP are not zero. Raw stat keys/labels remain visible, including
+NHL shots versus shootout goals and full-game versus season-to-date stats.
+Stat corrections, overtime and participation rules may require review.
+These endpoints are read-only: they do not settle bets, schedule background
+grading, or fetch CLV. Verified results can be saved through the existing bet
+update tool independently of closing odds. No subscription or key is required.
+
+Odds diagnostics now distinguish known historical-window, exhausted-credit and
+key errors from a generic 403, and identify SportsGameOdds HTTP 429. Unknown
+403 responses still require investigation; do not assume invalid credentials.
+No raw provider error body is returned by these adapters. League health marks
+provider runtime as shared across leagues/resources, so one resource's error
+must not be interpreted as a failure of every league.
+
 ## BALLDON'T LIE league data
 
 Save `BALLDONTLIE_API_KEY` in Render and deploy. With the default configuration,

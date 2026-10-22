@@ -1,5 +1,6 @@
 import { config } from '../config.js';
 import { HttpError } from '../errors.js';
+import { failureDetails } from './failureDetails.js';
 
 function requireApiKey() {
   const providerConfig = config.oddsProviders.parlayApi;
@@ -112,9 +113,8 @@ async function call(
   }
 
   if (!response.ok) {
-    const rawCode = responseBody?.error?.code ?? responseBody?.code;
-    const errorCode = typeof rawCode === 'string' && /^[A-Z][A-Z0-9_]{1,63}$/.test(rawCode)
-      ? rawCode : null;
+    const diagnostic = failureDetails(responseBody, response.status);
+    const { errorCode } = diagnostic;
     throw new HttpError(
       502,
       `ParlayAPI request failed (HTTP ${response.status}${errorCode ? ` ${errorCode}` : ''})`,
@@ -129,7 +129,7 @@ async function call(
           response.headers.get(
             'retry-after'
           ),
-        ...(errorCode ? { errorCode } : {})
+        ...diagnostic
       }
     );
   }
