@@ -32,7 +32,7 @@ export class EspnBoxscore {
     this.cache = new Map(); this.pending = new Map(); this.blockedUntil = 0;
   }
   async read(league, resource, params) {
-    if (!paths[league]) throw new HttpError(400, 'Free box-score lookup currently supports NBA and NHL.');
+    if (!Object.hasOwn(paths, league)) throw new HttpError(400, 'Free box-score lookup currently supports NBA and NHL.');
     const url = new URL(`${paths[league]}/${resource}`, ROOT);
     url.search = new URLSearchParams(params).toString();
     const key = url.href;
@@ -56,7 +56,7 @@ export class EspnBoxscore {
     this.pending.set(key, task); return task;
   }
   async listGames({ league, date }) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '') || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0, 10) !== date) throw new HttpError(400, 'date must be a valid YYYY-MM-DD.');
+    if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0, 10) !== date) throw new HttpError(400, 'date must be a valid YYYY-MM-DD.');
     const { body, fetched_at } = await this.read(league, 'scoreboard', { dates: date.replaceAll('-', ''), limit: '100' });
     if (!Array.isArray(body.events)) throw new HttpError(502, 'ESPN returned an invalid game list.');
     return { provider: 'espn', data: body.events.map(e => game(league, e)), meta: { fetched_at, date, date_timezone: 'provider_calendar', complete_schedule: false, note } };
@@ -75,7 +75,7 @@ export class EspnBoxscore {
       if (playerId && String(row.athlete.id) !== playerId) continue;
       const keys = group.keys || group.labels;
       const values = row.stats;
-      const aligned = Array.isArray(keys) && Array.isArray(values) && keys.length === values.length;
+      const aligned = Array.isArray(keys) && keys.length > 0 && Array.isArray(values) && keys.length === values.length;
       players.push({
         player_id: String(row.athlete.id), name: row.athlete.displayName,
         team_id: team.team?.id ? `espn:${league}:team:${team.team.id}` : null,
