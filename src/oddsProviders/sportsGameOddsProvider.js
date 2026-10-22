@@ -1,5 +1,6 @@
 import { config } from '../config.js';
 import { HttpError } from '../errors.js';
+import { failureDetails } from './failureDetails.js';
 
 /*
   SharpBet -> SportsGameOdds league mapping
@@ -1449,7 +1450,7 @@ async function callSportsGameOdds(
   ) {
     throw new HttpError(
       502,
-      'SportsGameOdds upstream request failed',
+      `SportsGameOdds upstream request failed (HTTP ${response.status}${response.status === 429 ? ': rate limit exceeded' : ''})`,
       {
         provider:
           'sportsGameOdds',
@@ -1465,7 +1466,7 @@ async function callSportsGameOdds(
             'retry-after'
           ),
 
-        body
+        ...failureDetails(body, response.status)
       }
     );
   }
