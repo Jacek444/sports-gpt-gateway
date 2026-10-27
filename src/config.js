@@ -92,12 +92,12 @@ export const config = {
   // configured general chain. Disabled/unconfigured sources are still skipped.
   oddsBetmgmProviderOrder: env(
     'ODDS_BETMGM_PROVIDER_ORDER',
-    'parlayApi,oddsPapi,sportsGameOdds,theOddsApi'
+    'theOddsApi,parlayApi,oddsPapi,sportsGameOdds'
   ).split(',').map(name => name.trim()).filter(Boolean),
 
   oddsProviderOrder: env(
     'ODDS_PROVIDER_ORDER',
-    'sharpApi,oddsPapi,moneyline,sportsGameOdds,parlayApi,theOddsApi'
+    'theOddsApi,sharpApi,oddsPapi,moneyline,sportsGameOdds,parlayApi'
   )
     .split(',')
     .map((name) => name.trim())
@@ -105,7 +105,7 @@ export const config = {
 
   oddsSportsProviderOrder: env(
     'ODDS_SPORTS_PROVIDER_ORDER',
-    'sharpApi,oddsPapi,parlayApi,theOddsApi,sportsGameOdds'
+    'theOddsApi,sharpApi,oddsPapi,parlayApi,sportsGameOdds'
   )
     .split(',')
     .map((name) => name.trim())

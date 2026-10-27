@@ -104,6 +104,15 @@ async function call(pathname, params = {}) {
 }
 
 export const theOddsApiProvider = {
+  getHistoricalOdds(sport, params = {}) {
+    return call(`/v4/historical/sports/${sport}/odds`, params);
+  },
+  getHistoricalEvents(sport, params = {}) {
+    return call(`/v4/historical/sports/${sport}/events`, params);
+  },
+  getHistoricalEventOdds(sport, eventId, params = {}) {
+    return call(`/v4/historical/sports/${sport}/events/${eventId}/odds`, params);
+  },
   getSports(params = {}) {
     return call('/v4/sports', params);
   },

@@ -13,6 +13,47 @@ servers:
 - url: https://sports-gpt-gateway.onrender.com
   description: SharpBet Sports GPT Gateway on Render
 paths:
+  /v1/odds/{sport}/history:
+    get:
+      operationId: getHistoricalOdds
+      summary: Read paid The Odds API historical snapshots with a credit cap
+      description: Costs up to 10 credits per market per region per snapshot; additional markets require event_odds and an exact The Odds API event ID. Historical event discovery costs 1. Cached for 24 hours per process. Snapshots are not verified exact closing prices.
+      parameters:
+        - in: path
+          name: sport
+          required: true
+          schema: {type: string}
+        - in: query
+          name: date
+          required: true
+          schema: {type: string, format: date-time}
+        - in: query
+          name: type
+          schema: {type: string, enum: [odds, events, event_odds], default: odds}
+        - in: query
+          name: event_id
+          schema: {type: string}
+        - in: query
+          name: markets
+          schema: {type: string, default: h2h}
+        - in: query
+          name: regions
+          schema: {type: string, default: us}
+        - in: query
+          name: bookmakers
+          schema: {type: string}
+        - in: query
+          name: max_credits
+          schema: {type: integer, minimum: 1, maximum: 100, default: 30}
+      responses:
+        '200':
+          description: Historical snapshot with source, quota, cost estimate and cache metadata
+          content:
+            application/json:
+              schema: {type: object, additionalProperties: true}
+        '400':
+          description: Invalid identifiers, timestamp, markets or credit limit
+
   /v1/boxscores/games:
     get:
       operationId: listBoxscoreGames
@@ -785,9 +826,7 @@ paths:
     post:
       operationId: gradeAndSaveClv
       summary: Grade logged bets for CLV from historical closing odds and optionally save the results
-      description: Grades up to 50 logged bets using ParlayAPI historical closing odds, matches the correct
-        event and wager side, calculates local CLV, and can write closing_line, closing_odds, closing_book,
-        clv_percent, clv_status, and clv_notes back to the bet log.
+      description: Grades up to 50 wagers. Select theOddsApi for paid pregame snapshot CLV with exact sport_key, theOddsApi gateway_event_id, commence_time, market_key, bookmaker_key, outcome and taken_odds; include player and line when applicable. No price CLV for changed lines. Omitted provider retains legacy ParlayAPI behavior.
       requestBody:
         required: true
         content:
@@ -795,9 +834,18 @@ paths:
             schema:
               type: object
               properties:
+                provider:
+                  type: string
+                  enum: [theOddsApi, parlayApi]
+                  default: theOddsApi
+                max_credits:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+                  default: 100
                 write_back:
                   type: boolean
-                  default: true
+                  default: false
                   description: When true, every wager must include bet_id and the calculated CLV result
                     is saved into that bet-log row.
                 bets:
@@ -807,6 +855,13 @@ paths:
                   items:
                     type: object
                     properties:
+                      gateway_event_id:
+                        type: string
+                        description: Original The Odds API ID with theOddsApi prefix. Rediscover foreign IDs.
+                      provider_event_id:
+                        type: string
+                      odds_provider:
+                        type: string
                       bet_id:
                         type:
                         - string

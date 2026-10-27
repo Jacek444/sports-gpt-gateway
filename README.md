@@ -128,7 +128,7 @@ adapters default to enabled when a key is configured. The API-Sports adapter
 uses the direct dashboard key with `x-apisports-key`; RapidAPI keys are not
 interchangeable. No keys belong in this repository or client-side requests.
 
-The default odds order is `sharpApi,oddsPapi,moneyline,sportsGameOdds,parlayApi,theOddsApi`.
+The default odds order is `theOddsApi,sharpApi,oddsPapi,moneyline,sportsGameOdds,parlayApi`.
 Explicit Render order overrides still win. OddsPapi reads account entitlements
 before paid-quota requests, uses subscribed books only, caches reference data
 for a day and prices for 60 seconds, and spaces requests by 2.2 seconds. It
@@ -189,7 +189,7 @@ References: [OddsPapi v4](https://oddspapi.io/en/docs),
 Set `SHARP_API_KEY` in Render's Environment settings (never in GitHub).
 `SHARP_API_ENABLED` defaults to `true`, but an absent key keeps the provider unavailable.
 The provider name is `sharpApi` in REST and MCP. New default provider orders put
-SharpAPI first. Explicit `ODDS_PROVIDER_ORDER` and `ODDS_SPORTS_PROVIDER_ORDER`
+The Odds API first. Explicit `ODDS_PROVIDER_ORDER` and `ODDS_SPORTS_PROVIDER_ORDER`
 values remain authoritative for general discovery and boards. Do not put SharpAPI
 ahead of BetMGM requests: its free adapter supports only DraftKings/FanDuel. Deploy the source before
 verifying `/health` and `/v1/odds/status`.
@@ -569,7 +569,7 @@ BALLDONTLIE currently documents webhooks for some sports, but not all of the lea
 
 Automatic `/v1/odds/:sport/odds` requests that explicitly include `bookmakers=betmgm`
 with only `h2h`, `spreads`, and/or `totals` first use
-`ODDS_BETMGM_PROVIDER_ORDER` (default `parlayApi,oddsPapi,sportsGameOdds,theOddsApi`),
+`ODDS_BETMGM_PROVIDER_ORDER` (default `theOddsApi,parlayApi,oddsPapi,sportsGameOdds`),
 then any additional providers from the configured board order. Disabled,
 unconfigured, and cooling-down providers remain skipped. This is a preference,
 not a claim of current provider health or market entitlement. The status endpoint
@@ -610,3 +610,51 @@ Null/invalid expiry is unknown; USED/VOID records stay consumed/unavailable.
 The API preserves saved status, does not update records on reads, and does not
 claim account availability was checked at the sportsbook. `status` filters still
 filter the saved column; inspect derived fields before evaluating a returned token.
+
+## Paid The Odds API historical snapshots and CLV
+
+The default general, event-discovery and BetMGM core odds chains prefer
+`theOddsApi`, retaining the prior fallbacks. Existing environment overrides
+remain authoritative: move `theOddsApi` first in `ODDS_PROVIDER_ORDER`,
+`ODDS_SPORTS_PROVIDER_ORDER` and `ODDS_BETMGM_PROVIDER_ORDER` on an existing service.
+
+`GET /v1/odds/:sport/history` (MCP `sharpbet_get_historical_odds`) accepts:
+- `date`: past ISO timestamp with timezone, required.
+- `type`: `odds` (core board), `events` (ID discovery), `event_odds` (props or any supported event market).
+- `event_id`: required for `event_odds`; only original The Odds API IDs, optionally prefixed `theOddsApi:`.
+- `markets` (default `h2h`), `regions` (default `us`), `bookmakers` (optional exact keys).
+- `max_credits`: default 30, hard maximum 100 per request.
+
+Historical odds cost an estimated 10 credits × markets × regions per snapshot;
+props/additional markets are per event. Specifying books overrides regions;
+each group of up to 10 books counts as one region. Historical event discovery
+costs 1 credit. Empty/missing markets may cost less; returned quota headers are
+the actual usage evidence. No automatic retries or cross-provider history
+fallback are added. Valid requests reuse the gateway's 24-hour process-local
+cache; redeploys/restarts clear it. This is not a monthly or account-wide cap.
+See https://the-odds-api.com/liveapi/guides/v4/ for current billing and coverage.
+
+`POST /v1/odds/clv/grade-and-save` supports `provider: "theOddsApi"` and
+`max_credits` (default/hard maximum 100 per batch). This source requires exact
+`sport_key`, `gateway_event_id` from The Odds API (or an explicitly attributed
+`provider_event_id`), past `commence_time`, `market_key`, `bookmaker_key`,
+`outcome` and American `taken_odds`. Include `line` for non-moneyline markets
+and `player` for player markets. For legacy records discover the original ID
+with historical events and verify teams/time before enriching the input; never
+rewrite another provider's prefix. Requests group identical event/market/book/
+timestamp lookups so multiple players can share a paid request.
+
+CLV fetches the snapshot at or before scheduled start minus one second. It
+requires exact fixture/start, book, market and selection, and a snapshot and
+quote within 15 minutes before start. It reports a **pregame snapshot proxy**,
+not a verified final close (actual start time may differ). Same-line price CLV
+is `(decimal_taken / decimal_snapshot - 1) * 100`; this is not no-vig EV. Changed
+lines retain the closing line/price but have no price CLV percentage. Missing,
+stale, ambiguous or mismatched evidence returns unmatched and never overwrites
+saved CLV. Successful writes preserve timestamps and method in `clv_notes`.
+
+The MCP grading tool defaults to The Odds API and `write_back: false`.
+Explicit `write_back: true` and every `bet_id` are required to save this source's
+results. Direct legacy HTTP requests omitting provider retain ParlayAPI behavior;
+`sharpbet_get_closing_odds` and `sharpbet_clv_lookup` remain legacy ParlayAPI tools.
+No scheduler, bulk backfill, wagers or live saved records are created by this change.
