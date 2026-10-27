@@ -1,3 +1,4 @@
+import { historyRequest, fetchHistory, prepareClv, gradeSnapshot } from '../history/oddsHistory.js';
 import express from 'express';
 import { config } from '../config.js';
 import { HttpError } from '../errors.js';
@@ -2458,6 +2459,14 @@ oddsApiRouter.post(
   matches each wager locally, calculates CLV, and optionally
   writes the result into the SharpBet bet log.
 */
+// Explicit historical timestamps support CLV, line movement and small backtests.
+oddsApiRouter.get('/:sport/history', async (req, res, next) => {
+  try {
+    const request = historyRequest(req.params.sport, req.query);
+    res.json(await fetchHistory(request, withSpecificOddsProvider));
+  } catch (error) { next(error); }
+});
+
 oddsApiRouter.post(
   '/clv/grade-and-save',
   async (req, res, next) => {
@@ -2467,6 +2476,31 @@ oddsApiRouter.post(
         typeof req.body === 'object'
           ? req.body
           : {};
+
+      if (body.provider === 'theOddsApi') {
+        const plan = prepareClv(body.bets, body.max_credits ?? 100);
+        const writeBack = body.write_back === true;
+        if (writeBack && body.bets.some(bet => !bet.bet_id)) {
+          throw new HttpError(400, 'bet_id required for write_back=true');
+        }
+        const fetched = new Map();
+        for (const [key, request] of plan.groups) {
+          fetched.set(key, await fetchHistory(request, withSpecificOddsProvider));
+        }
+        const results = [];
+        for (const item of plan.prepared) {
+          const grade = gradeSnapshot(item, fetched.get(item.key));
+          const savedEntry = writeBack && grade.log_update
+            ? await updateBetLogEntry(item.bet.bet_id, grade.log_update) : null;
+          results.push({ bet_index: item.index, bet_id: item.bet.bet_id || null,
+            ...grade, saved: Boolean(savedEntry) });
+        }
+        return res.json({ provider: 'theOddsApi', method: 'pregame_historical_snapshot_proxy',
+          estimated_credits: plan.estimated_credits,
+          groups: [...fetched.values()].map(r => ({ quota: r.quota, cache: r.cache, actual_credits: r.actual_credits })),
+          write_back: writeBack, results });
+      }
+      if (body.provider && body.provider !== 'parlayApi') throw new HttpError(400, 'Unsupported CLV provider');
 
       const inputBets =
         Array.isArray(

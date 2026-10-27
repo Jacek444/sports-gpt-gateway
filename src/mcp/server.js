@@ -470,6 +470,24 @@ export const mcpHandler = createMcpHandler(() => {
   );
 
   server.registerTool(
+    'sharpbet_get_historical_odds',
+    {
+      description: 'Read paid The Odds API historical snapshots for CLV, line movement or targeted backtests. Cost: 10 credits per market per region per snapshot (props per event); event discovery costs 1. Default cap 30, maximum 100. Cache lasts 24 hours in this process. Snapshot is not guaranteed exact closing price. Use exact source event IDs.',
+      inputSchema: z.object({
+        sport: z.string(), date: z.string(),
+        type: z.enum(['odds', 'events', 'event_odds']).default('odds'),
+        event_id: z.string().optional(), markets: z.string().default('h2h'),
+        regions: z.string().default('us'), bookmakers: z.string().optional(),
+        max_credits: z.number().int().min(1).max(100).default(30)
+      })
+    },
+    async ({ sport, ...params }) => {
+      try { return toolSuccess(await gatewayGet(`/v1/odds/${encodeURIComponent(sport)}/history`, params)); }
+      catch (error) { return toolFailure(error); }
+    }
+  );
+
+  server.registerTool(
     'sharpbet_get_closing_odds',
     {
       description:
@@ -1007,9 +1025,11 @@ export const mcpHandler = createMcpHandler(() => {
     'sharpbet_grade_and_save_clv',
     {
       description:
-        'Grade up to 50 bets against historical closing odds and optionally save the resulting CLV fields back to the SharpBet bet log.',
+        'Grade wagers using The Odds API pregame historical snapshots (default) or legacy ParlayAPI. The Odds API needs exact sport_key, theOddsApi gateway_event_id, past commence_time, market_key, bookmaker_key, outcome, taken_odds and line/player where applicable. Returns unmatched for stale/missing evidence; line changes have no price CLV percentage. Cap 100 credits per batch. Preview by default; only write confirmed records when requested.',
       inputSchema: z.object({
-        write_back: z.boolean().default(true),
+        provider: z.enum(['theOddsApi', 'parlayApi']).default('theOddsApi'),
+        max_credits: z.number().int().min(1).max(100).default(100),
+        write_back: z.boolean().default(false),
         bets: z.array(
           z.object({
             bet_id: z.union([z.string(), z.null()]).optional(),
