@@ -24,7 +24,7 @@ export function historyRequest(sport, input, now = Date.now()) {
   const max = Number(input.max_credits ?? 30);
   if (!Number.isInteger(max) || max < 1 || max > 100) fail('max_credits must be between 1 and 100');
   if (estimate > max) fail(`Historical request estimate ${estimate} credits exceeds max_credits=${max}`);
-  const params = { date: new Date(input.date).toISOString(), oddsFormat: 'american' };
+  const params = { date: new Date(input.date).toISOString().replace(/\.\d{3}Z$/, 'Z'), oddsFormat: 'american' };
   if (type !== 'events') {
     params.markets = markets.join(',');
     if (books.length) params.bookmakers = books.join(',');
