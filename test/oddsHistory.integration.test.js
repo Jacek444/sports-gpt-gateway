@@ -14,6 +14,7 @@ test('historical HTTP/MCP reads, CLV preview, caching and budget guards use only
       return res.end('[]');
     }
     calls++;
+    assert.match(new URL(req.url, 'http://localhost').searchParams.get('date'), /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
     assert.match(req.url, /^\/v4\/historical\/sports\/basketball_nba\//);
     res.setHeader('x-requests-last', '10');
     res.end(JSON.stringify({ timestamp: '2026-01-01T00:55:00Z', data: event }));

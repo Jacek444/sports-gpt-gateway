@@ -6,6 +6,8 @@ const archive = () => ({ data: { timestamp: '2026-01-01T00:55:00Z', data: { id: 
 test('historical credit estimates and validation reject excessive or invalid requests', () => {
   const q = { date: '2026-01-01T00:55:00Z', markets: 'h2h,spreads,totals' };
   assert.equal(historyRequest('basketball_nba', q).estimated_credits, 30);
+  assert.equal(historyRequest('basketball_nba', q).params.date, '2026-01-01T00:55:00Z');
+  assert.equal(historyRequest('basketball_nba', { ...q, date: '2025-12-31T18:55:00.123-06:00' }).params.date, '2026-01-01T00:55:00Z');
   assert.throws(() => historyRequest('basketball_nba', { ...q, regions: 'us,eu' }), /exceeds/);
   assert.equal(historyRequest('basketball_nba', { ...q, regions: 'us,eu', bookmakers: 'betmgm' }).estimated_credits, 30);
   assert.throws(() => historyRequest('basketball_nba', { ...q, date: '2026-01-01' }), /timezone/);
